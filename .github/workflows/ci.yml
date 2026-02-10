@@ -15,7 +15,7 @@ permissions:
 jobs:
   test:
     name: Build, Test, and Lint
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     
     strategy:
       matrix:
@@ -30,6 +30,9 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'yarn'
+      
+      - name: Enable Corepack
+        run: corepack enable
       
       - name: Install dependencies
         run: yarn install --immutable

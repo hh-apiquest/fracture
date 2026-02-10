@@ -11,7 +11,7 @@ permissions:
 jobs:
   test:
     name: Build, Test, and Validate
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
@@ -41,7 +41,7 @@ jobs:
   publish:
     name: Publish Packages
     needs: test
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
