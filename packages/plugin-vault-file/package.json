@@ -1,0 +1,49 @@
+{
+  "name": "@apiquest/plugin-vault-file",
+  "version": "1.0.0",
+  "description": "File-based vault provider plugin for ApiQuest (JSON, readonly)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c && tsc --emitDeclarationOnly",
+    "dev": "rollup -c --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "apiquest",
+    "vault",
+    "secrets",
+    "plugin",
+    "file"
+  ],
+  "author": "ApiQuest",
+  "license": "AGPL-3.0-or-later",
+  "apiquest": {
+    "type": "value",
+    "runtime": [
+      "fracture"
+    ],
+    "capabilities": {
+      "provides": {
+        "provider": "file"
+      }
+    }
+  },
+  "dependencies": {
+    "@apiquest/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@apiquest/types": "workspace:*",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@types/node": "^20.10.6",
+    "rollup": "^4.0.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@apiquest/types": "^1.0.0"
+  }
+}

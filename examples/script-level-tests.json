@@ -1,0 +1,58 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "script-level-tests",
+    "name": "Script Level Tests",
+    "version": "1.0.0",
+    "description": "Diagnostic collection to verify script execution at all levels"
+  },
+  "protocol": "http",
+  "variables": {
+    "baseUrl": "https://httpbin.org"
+  },
+  "collectionPreScript": "quest.global.variables.set('collectionPre', 'yes');\nquest.collection.variables.set('collectionPre', 'yes');",
+  "collectionPostScript": "quest.global.variables.set('collectionPostFlag', 'set');\nconsole.log('Collection post-script ran. Variables and logging allowed, tests must be in request post-scripts.');",
+  "preRequestScript": "quest.global.variables.set('collectionPreRequest', 'yes');",
+  "postRequestScript": "const count = Number(quest.global.variables.get('collectionPostRequestCount') || 0);\nquest.global.variables.set('collectionPostRequestCount', String(count + 1));",
+  "items": [
+    {
+      "type": "folder",
+      "id": "folder-1",
+      "name": "Folder One",
+      "folderPreScript": "quest.scope.variables.set('folderPre', 'yes');",
+      "folderPostScript": "quest.global.variables.set('folderPostFlag', 'set');",
+      "preRequestScript": "quest.scope.variables.set('folderPreRequest', 'yes');",
+      "postRequestScript": "const count = Number(quest.global.variables.get('folderPostRequestCount') || 0);\nquest.global.variables.set('folderPostRequestCount', String(count + 1));",
+      "items": [
+        {
+          "type": "request",
+          "id": "req-1",
+          "name": "Request One",
+          "data": {
+            "method": "GET",
+            "url": "{{baseUrl}}/get?req=1",
+            "headers": {
+              "Accept": "application/json"
+            }
+          },
+          "preRequestScript": "quest.scope.variables.set('requestPre', 'yes');",
+          "postRequestScript": "quest.test('collection pre ran', () => {\n  expect(quest.collection.variables.get('collectionPre')).to.equal('yes');\n});\n\nquest.test('collection preRequest ran', () => {\n  expect(quest.global.variables.get('collectionPreRequest')).to.equal('yes');\n});\n\nquest.test('folder pre ran', () => {\n  expect(quest.scope.variables.get('folderPre')).to.equal('yes');\n});\n\nquest.test('folder preRequest ran', () => {\n  expect(quest.scope.variables.get('folderPreRequest')).to.equal('yes');\n});\n\nquest.test('request pre ran', () => {\n  expect(quest.scope.variables.get('requestPre')).to.equal('yes');\n});\n\nquest.test('response status 200', () => {\n  expect(quest.response.status).to.equal(200);\n});"
+        },
+        {
+          "type": "request",
+          "id": "req-2",
+          "name": "Request Two",
+          "data": {
+            "method": "GET",
+            "url": "{{baseUrl}}/get?req=2",
+            "headers": {
+              "Accept": "application/json"
+            }
+          },
+          "preRequestScript": "quest.scope.variables.set('requestPre', 'yes');",
+          "postRequestScript": "quest.test('collection postRequest ran for request 1', () => {\n  expect(quest.global.variables.get('collectionPostRequestCount')).to.equal('1');\n});\n\nquest.test('folder postRequest ran for request 1', () => {\n  expect(quest.global.variables.get('folderPostRequestCount')).to.equal('1');\n});\n\nquest.test('response status 200', () => {\n  expect(quest.response.status).to.equal(200);\n});"
+        }
+      ]
+    }
+  ]
+}

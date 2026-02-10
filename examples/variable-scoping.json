@@ -1,0 +1,45 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "variable-test",
+    "name": "Variable Scoping Demo",
+    "version": "1.0.0",
+    "description": "Demonstrates variable scoping at all levels: local, global, collection, environment"
+  },
+  "variables": {
+    "collectionVar": "fromCollection",
+    "overrideTest": "collection"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Test Variable Scoping",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "preRequestScript": "// Set variables at different levels\nquest.scope.variables.set('localVar', 'fromLocal');\nquest.global.variables.set('globalVar', 'fromGlobal');\nquest.variables.set('tempVar', 'usingSetVariable');\n\nconsole.log('Pre-request: Setting variables...');\nconsole.log('Local:', quest.scope.variables.get('localVar'));\nconsole.log('Global:', quest.global.variables.get('globalVar'));",
+      "postRequestScript": "quest.test('Can read collection variable', () => {\n  expect(quest.collection.variables.get('collectionVar')).to.equal('fromCollection');\n});\n\nquest.test('Can read local variable', () => {\n  expect(quest.scope.variables.get('localVar')).to.equal('fromLocal');\n});\n\nquest.test('Can read global variable', () => {\n  expect(quest.global.variables.get('globalVar')).to.equal('fromGlobal');\n});\n\nquest.test('Variable cascading works (variables.get)', () => {\n  // variables.get should cascade: local -> global -> collection -> environment\n  expect(quest.variables.get('localVar')).to.equal('fromLocal');\n  expect(quest.variables.get('globalVar')).to.equal('fromGlobal');\n  expect(quest.variables.get('collectionVar')).to.equal('fromCollection');\n});\n\nquest.test('Local variables override all', () => {\n  quest.scope.variables.set('overrideTest', 'local');\n  expect(quest.variables.get('overrideTest')).to.equal('local');\n});\n\nquest.test('quest.request.info provides request metadata', () => {\n  expect(quest.request.info.name).to.equal('Test Variable Scoping');\n  expect(quest.request.info.protocol).to.equal('http');\n});\n\n// Verify variables persisted\nconsole.log('Post-request: Verifying variables...');\nconsole.log('Global var still exists:', quest.global.variables.get('globalVar'));\nconsole.log('Local var from pre-request:', quest.scope.variables.get('localVar'));"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "Test Variable Persistence",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/2",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "postRequestScript": "quest.test('Global variables persist across requests', () => {\n  // Global variable set in req-1 should still exist\n  expect(quest.global.variables.get('globalVar')).to.equal('fromGlobal');\n});\n\nquest.test('Local variables are request-scoped', () => {\n  // Local variable from req-1 should NOT exist here\n  expect(quest.scope.variables.get('localVar')).to.be.null;\n});\n\nquest.test('Collection variables always available', () => {\n  expect(quest.collection.variables.get('collectionVar')).to.equal('fromCollection');\n});"
+    }
+  ]
+}

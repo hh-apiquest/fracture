@@ -1,0 +1,56 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "basic-api",
+    "name": "Basic API Test Collection",
+    "version": "1.0.0",
+    "description": "Sample HTTP requests to test ApiQuest functionality"
+  },
+  "variables": {
+    "baseUrl": "https://jsonplaceholder.typicode.com"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Get Single Post",
+      "data": {
+        "method": "GET",
+        "url": "{{baseUrl}}/posts/1",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "postRequestScript": "quest.test('Status is 200', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Response has userId', () => {\n  const body = quest.response.json();\n  expect(body).to.have.property('userId');\n});\n\nquest.test('Response has title', () => {\n  const body = quest.response.json();\n  expect(body.title).to.be.a('string');\n  expect(body.title.length).to.be.greaterThan(0);\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "Get All Posts",
+      "data": {
+        "method": "GET",
+        "url": "{{baseUrl}}/posts",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "postRequestScript": "quest.test('Status is 200', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Response is array', () => {\n  const body = quest.response.json();\n  expect(body).to.be.an('array');\n});\n\nquest.test('Has multiple posts', () => {\n  const body = quest.response.json();\n  expect(body.length).to.be.greaterThan(5);\n});\n\nquest.test('Each post has required fields', () => {\n  const body = quest.response.json();\n  const firstPost = body[0];\n  expect(firstPost).to.have.property('id');\n  expect(firstPost).to.have.property('title');\n  expect(firstPost).to.have.property('body');\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-3",
+      "name": "Create New Post",
+      "data": {
+        "method": "POST",
+        "url": "{{baseUrl}}/posts",
+        "headers": {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        "body": "{\"title\": \"Test Post\", \"body\": \"This is a test\", \"userId\": 1}"
+      },
+      "postRequestScript": "console.log('Response body:', quest.response.body);\n\nquest.test('Status is 201', () => {\n  expect(quest.response.status).to.equal(201);\n});\n\nquest.test('Response contains created post', () => {\n  const body = quest.response.json();\n  console.log('Parsed body:', JSON.stringify(body));\n  console.log('Body title:', body.title);\n  expect(body).to.have.property('id');\n  expect(body).to.have.property('title');\n  if (body.title) {\n    expect(body.title).to.equal('Test Post');\n  }\n});"
+    }
+  ]
+}

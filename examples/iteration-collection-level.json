@@ -1,0 +1,43 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "name": "Collection-Level Iteration Test",
+    "id": "collection-iter-test",
+    "version": "1.0.0"
+  },
+  "testData": [
+    {
+      "userId": "4",
+      "postId": "1"
+    },
+    {
+      "userId": "5",
+      "postId": "2"
+    }
+  ],
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "get-user",
+      "name": "Get User",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/users/{{userId}}"
+      },
+      "postRequestScript": "quest.test('User request succeeded', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Collection iteration data available', () => {\n  const userId = quest.iteration.data.get('userId');\n  console.log('Collection iteration userId:', userId);\n  expect(userId).to.not.be.null;\n});\n\nquest.test('Collection iteration counter works', () => {\n  const current = quest.iteration.current;\n  const count = quest.iteration.count;\n  console.log(`Collection iteration ${current} of ${count}`);\n  expect(count).to.equal(2);\n});"
+    },
+    {
+      "type": "request",
+      "id": "get-post",
+      "name": "Get Post",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/{{postId}}"
+      },
+      "postRequestScript": "quest.test('Post request succeeded', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Same collection iteration data accessible', () => {\n  const postId = quest.iteration.data.get('postId');\n  console.log('Collection iteration postId:', postId);\n  expect(postId).to.not.be.null;\n});\n\nquest.test('Can access collection name and ID', () => {\n  console.log('Collection name:', quest.collection.info.name);\n  console.log('Collection ID:', quest.collection.info.id);\n  expect(quest.collection.info.name).to.equal('Collection-Level Iteration Test');\n  expect(quest.collection.info.id).to.equal('collection-iter-test');\n});"
+    }
+  ]
+}

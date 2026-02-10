@@ -1,0 +1,50 @@
+{
+  "name": "@apiquest/fracture",
+  "version": "1.0.0",
+  "description": "Core collection runner engine for ApiQuest with integrated CLI",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "bin": {
+    "apiquest": "./bin/cli.js",
+    "fracture": "./bin/cli.js",
+    "quest": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "api",
+    "testing",
+    "runner",
+    "quest",
+    "apiquest",
+    "fracture",
+    "cli"
+  ],
+  "author": "ApiQuest",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "@apiquest/types": "workspace:*",
+    "@types/graphlib": "^2.1.12",
+    "@types/lodash": "^4.17.23",
+    "acorn": "^8.11.0",
+    "acorn-walk": "^8.3.0",
+    "chai": "^6.2.2",
+    "commander": "^11.1.0",
+    "got": "^14.6.6",
+    "graphlib": "^2.1.8",
+    "lodash": "^4.17.23",
+    "moment": "^2.30.1",
+    "tough-cookie": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/acorn": "^4.0.6",
+    "@types/chai": "^5.2.3",
+    "@types/node": "^25.1.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  }
+}

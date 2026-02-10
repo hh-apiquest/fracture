@@ -1,0 +1,22 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "name": "CLI Data Test",
+    "id": "cli-data-test",
+    "version": "1.0.0"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "get-user",
+      "name": "Get User from CLI Data",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/users/{{userId}}"
+      },
+      "postRequestScript": "quest.test('CLI data is loaded', () => {\n  const userId = quest.iteration.data.get('userId');\n  console.log('userId from CLI data:', userId);\n  expect(userId).to.not.be.null;\n});\n\nquest.test('Can access username from CLI data', () => {\n  const username = quest.iteration.data.get('username');\n  console.log('username from CLI data:', username);\n  expect(username).to.not.be.null;\n});\n\nquest.test('Variables cascade from CLI data', () => {\n  const email = quest.variables.get('email');\n  console.log('email from cascading variables:', email);\n  expect(email).to.not.be.null;\n});\n\nquest.test('CLI data count matches file', () => {\n  const count = quest.iteration.count;\n  console.log('Total iterations:', count);\n  expect(count).to.equal(3);\n});\n\nquest.test('Can access all CLI data rows', () => {\n  const allData = quest.iteration.data.all();\n  console.log(`Total data rows: ${allData.length}`);\n  expect(allData.length).to.equal(3);\n});"
+    }
+  ]
+}

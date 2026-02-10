@@ -247,3 +247,25 @@ fracture run api.json --data users.csv --iterations 10
 - Plugin auto-discovery scans shared user directories and global npm scope for `@apiquest` packages
 - Runner emits lifecycle events (`beforeRequest`, `afterRequest`, `assertion`) for custom reporters
 - All examples use `fracture` command (aliases: `quest`, `apiquest`)
+
+
+## Contributing
+
+We welcome contributions! Before submitting a pull request, please:
+
+1. Review our [Contributing Guide](./CONTRIBUTING.md)
+2. **Sign the [Contributor License Agreement (CLA)](./CLA.md)** - Required for all contributions
+
+The CLA enables dual licensing and keeps the project sustainable. It's a simple one-time process automated through our CLA bot. [Learn more about why we need a CLA](./CLA.md).
+
+## License
+
+ApiQuest Fracture is dual-licensed:
+
+- **Open Source**: [GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)](./LICENSE)
+- **Commercial**: Alternative licensing available for businesses - contact us at sales@HumanHub.io
+
+This dual-licensing model allows us to:
+- Keep the project freely available for the open-source community
+- Offer flexible licensing terms for commercial use
+- Sustain ongoing development and support

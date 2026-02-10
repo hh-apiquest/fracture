@@ -1,0 +1,32 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "test-control",
+    "name": "Test Control Flow (skip/fail)",
+    "version": "1.0.0",
+    "description": "Demonstrates quest.skip() and quest.fail() for test control"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Test Skip and Fail",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1"
+      },
+      "postRequestScript": "quest.test('This test should pass', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('This test is skipped', () => {\n  quest.skip('Skipping this test for demonstration');\n  // This code won't execute after skip()\n  expect(true).to.be.false;\n});\n\nquest.test('Test after skip still runs', () => {\n  expect(quest.response.body.length).to.be.greaterThan(0);\n});\n\nquest.test('Another skipped test', () => {\n  quest.skip('Demonstrating skip with no additional code');\n});\n\nquest.test('Conditional skip example', () => {\n  const shouldSkip = false;\n  if (shouldSkip) {\n    quest.skip('Conditionally skipped');\n    return;\n  }\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Using quest.fail() for custom failures', () => {\n  const data = quest.response.json();\n  \n  if (!data) {\n    quest.fail('Response body is not valid JSON');\n  }\n  \n  if (!data.title) {\n    quest.fail('Response missing required field: title');\n  }\n  \n  expect(data.title).to.be.a('string');\n});\n\nquest.test('Conditional failure example', () => {\n  const body = quest.response.json();\n  \n  // Early exit with custom error message\n  if (body.userId !== 1) {\n    quest.fail(`Expected userId to be 1, but got ${body.userId}`);\n  }\n  \n  // This won't run if the fail() was called\n  expect(body.userId).to.equal(1);\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "Test Skip vs Fail Behavior",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/999"
+      },
+      "postRequestScript": "quest.test('404 response received', () => {\n  expect(quest.response.status).to.equal(404);\n});\n\nquest.test('Skipped tests do not count as failures', () => {\n  // Demonstrate that skipped tests are tracked separately\n  console.log('Skipped tests are shown in results but do not fail the suite');\n  expect(true).to.be.true;\n});\n\nquest.test('This demonstrates skip', () => {\n  quest.skip('Skipping to show it appears in results');\n});\n\nquest.test('forced failed test', () => {\n  const body = quest.response.json();\n  \n  // This will fail because 404 returns empty object\n  if (!body || Object.keys(body).length === 0) {\n    quest.fail('404 endpoint returned empty response as expected');\n  }\n  \n  // This won't execute because fail() was called\n  expect(body).to.have.property('title');\n});"
+    }
+  ]
+}

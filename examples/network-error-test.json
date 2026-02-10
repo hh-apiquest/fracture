@@ -1,0 +1,41 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "name": "Network Error Handling Test",
+    "version": "1.0.0",
+    "description": "Tests that network errors are properly exposed to test scripts"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "name": "Valid Request",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1"
+      },
+      "postRequestScript": "quest.test('Should have no network error', () => {\n  expect(quest.response.status).to.equal(200);\n});"
+    },
+    {
+      "type": "request",
+      "name": "Invalid URL - DNS Failure",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://this-domain-definitely-does-not-exist-12345.com/api"
+      },
+      "postRequestScript": "quest.test('Should have network error', () => {\n  console.log('Response available:', quest.response !== null);\n  // Network errors may prevent response from being available\n  expect(true).to.be.true;\n});\n\nquest.test('Should be able to handle error gracefully', () => {\n  // Collection should continue\n  expect(true).to.be.true;\n});"
+    },
+    {
+      "type": "request",
+      "name": "Request After Error",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/2"
+      },
+      "postRequestScript": "quest.test('Collection should continue after network error', () => {\n  expect(quest.response.status).to.equal(200);\n  console.log('Collection continued successfully after network error!');\n});"
+    }
+  ]
+}

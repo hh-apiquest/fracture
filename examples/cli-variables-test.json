@@ -1,0 +1,41 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "cli-vars-test",
+    "name": "CLI Variables Test",
+    "version": "1.0.0",
+    "description": "Tests global variables passed via CLI -g flag"
+  },
+  "variables": [],
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Test CLI Global Variables",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "postRequestScript": "console.log('=== Testing CLI Global Variables ===');\n\nquest.test('CLI global variable testKey is accessible', () => {\n  const value = quest.global.variables.get('testKey');\n  console.log('testKey value:', value);\n  expect(value).to.not.be.null;\n  expect(value).to.equal('testValue');\n});\n\nquest.test('CLI global variable apiVersion is accessible', () => {\n  const value = quest.global.variables.get('apiVersion');\n  console.log('apiVersion value:', value);\n  expect(value).to.not.be.null;\n  expect(value).to.equal('v2');\n});\n\nquest.test('variables.get cascades to CLI globals', () => {\n  // variables.get should find CLI-passed global var\n  const testKey = quest.variables.get('testKey');\n  const apiVersion = quest.variables.get('apiVersion');\n  \n  console.log('Via variables.get - testKey:', testKey);\n  console.log('Via variables.get - apiVersion:', apiVersion);\n  \n  expect(testKey).to.equal('testValue');\n  expect(apiVersion).to.equal('v2');\n});\n\nquest.test('Non-existent global variable returns null', () => {\n  const notExist = quest.global.variables.get('doesNotExist');\n  console.log('Non-existent var:', notExist);\n  expect(notExist).to.be.null;\n});\n\nquest.test('Can modify CLI-passed global variables', () => {\n  // Set a new value\n  quest.global.variables.set('testKey', 'modifiedValue');\n  \n  const newValue = quest.global.variables.get('testKey');\n  console.log('Modified testKey:', newValue);\n  expect(newValue).to.equal('modifiedValue');\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "Verify Modified Globals Persist",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/2",
+        "headers": {
+          "Accept": "application/json"
+        }
+      },
+      "postRequestScript": "console.log('=== Verifying Global Persistence ===');\n\nquest.test('Modified global persists to next request', () => {\n  const value = quest.global.variables.get('testKey');\n  console.log('testKey in request 2:', value);\n  expect(value).to.equal('modifiedValue');\n});\n\nquest.test('Original apiVersion still exists', () => {\n  const value = quest.global.variables.get('apiVersion');\n  console.log('apiVersion in request 2:', value);\n  expect(value).to.equal('v2');\n});"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "name": "@apiquest/plugin-http",
+  "version": "1.0.0",
+  "description": "HTTP protocol plugin for Quest",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c && tsc --emitDeclarationOnly",
+    "dev": "rollup -c --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "api",
+    "http",
+    "quest",
+    "plugin"
+  ],
+  "author": "ApiQuest",
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "got": "^14.6.6",
+    "hpagent": "^1.2.0"
+  },
+  "devDependencies": {
+    "@apiquest/types": "workspace:*",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@types/node": "^20.10.6",
+    "rollup": "^4.0.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@apiquest/types": "^1.0.0"
+  },
+  "apiquest": {
+    "type": "protocol",
+    "runtime": [
+      "fracture"
+    ],
+    "capabilities": {
+      "provides": {
+        "protocols": [
+          "http"
+        ]
+      },
+      "supports": {
+        "authTypes": [
+          "bearer",
+          "basic",
+          "oauth2",
+          "apikey",
+          "digest",
+          "ntlm"
+        ],
+        "strictAuthList": false
+      }
+    }
+  }
+}

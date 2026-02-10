@@ -1,0 +1,44 @@
+{
+  "info": {
+    "name": "Complete API Test",
+    "id": "api-complete-test",
+    "description": "Tests quest.environment, quest.history, and quest.cookies APIs"
+  },
+  "protocol": "http",
+  "variables": [],
+  "items": [
+    {
+      "type": "request",
+      "id": "req1",
+      "name": "Request 1 - Setup",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1"
+      },
+      "postRequestScript": "quest.environment.variables.set('envVar1', 'valueFromScript');\nquest.environment.variables.set('apiEndpoint', 'https://api.example.com');\n\nquest.test('Environment variable was set', () => {\n  const value = quest.environment.variables.get('envVar1');\n  expect(value).to.equal('valueFromScript');\n});\n\nquest.test('Environment variable from script is readable', () => {\n  const endpoint = quest.environment.variables.get('apiEndpoint');\n  expect(endpoint).to.equal('https://api.example.com');\n});\n\nquest.test('History has 1 request', () => {\n  expect(quest.history.requests.count()).to.equal(1);\n});\n\nquest.test('History.last() returns this request', () => {\n  const last = quest.history.requests.last();\n  expect(last).to.not.be.null;\n  expect(last.name).to.equal('Request 1 - Setup');\n});"
+    },
+    {
+      "type": "request",
+      "id": "req2",
+      "name": "Request 2 - Verify History",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/users/1"
+      },
+      "postRequestScript": "quest.test('History has 2 requests now', () => {\n  expect(quest.history.requests.count()).to.equal(2);\n});\n\nquest.test('Can get request by ID', () => {\n  const req = quest.history.requests.get('req1');\n  expect(req).to.not.be.null;\n  expect(req.name).to.equal('Request 1 - Setup');\n});\n\nquest.test('Can get request by name', () => {\n  const req = quest.history.requests.get('Request 1 - Setup');\n  expect(req).to.not.be.null;\n  expect(req.id).to.equal('req1');\n});\n\nquest.test('History.all() returns array', () => {\n  const all = quest.history.requests.all();\n  expect(all).to.be.an('array');\n  expect(all.length).to.equal(2);\n});\n\nquest.test('Environment variable persists across requests', () => {\n  const value = quest.environment.variables.get('envVar1');\n  expect(value).to.equal('valueFromScript');\n});"
+    },
+    {
+      "type": "request",
+      "id": "req3",
+      "name": "Request 3 - Test Cookies",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://httpbin.org/cookies/set?testcookie=cookievalue&session=abc123"
+      },
+      "postRequestScript": "quest.test('Cookies API exists', () => {\n  expect(quest.cookies).to.not.be.undefined;\n  expect(typeof quest.cookies.get).to.equal('function');\n  expect(typeof quest.cookies.has).to.equal('function');\n  expect(typeof quest.cookies.toObject).to.equal('function');\n});\n\nquest.test('Cookies.toObject() returns object', () => {\n  const cookies = quest.cookies.toObject();\n  expect(cookies).to.be.an('object');\n});\n\nquest.test('History updated after each request', () => {\n  expect(quest.history.requests.count()).to.equal(3);\n});\n\nquest.test('Last request is current one', () => {\n  const last = quest.history.requests.last();\n  expect(last.name).to.equal('Request 3 - Test Cookies');\n});"
+    }
+  ]
+}

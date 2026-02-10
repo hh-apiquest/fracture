@@ -1,0 +1,8 @@
+{
+  "name": "Test Environment",
+  "variables": {
+    "environmentVar": "fromEnvironment",
+    "apiUrl": "https://jsonplaceholder.typicode.com",
+    "baseUrl": "https://jsonplaceholder.typicode.com"
+  }
+}

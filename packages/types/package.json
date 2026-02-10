@@ -1,0 +1,22 @@
+{
+  "name": "@apiquest/types",
+  "version": "1.0.0",
+  "description": "Shared TypeScript types for ApiQuest",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "keywords": [
+    "apiquest",
+    "types",
+    "schema"
+  ],
+  "author": "ApiQuest",
+  "license": "AGPL-3.0-or-later",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

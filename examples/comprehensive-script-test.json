@@ -1,0 +1,89 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "comprehensive-script-test",
+    "name": "Comprehensive Script Execution Test",
+    "version": "1.0.0",
+    "description": "Tests script execution at all levels, variable scoping, and sendRequest (async & callback)"
+  },
+  "protocol": "http",
+  "variables": {
+    "collectionVar": "fromCollection"
+  },
+  "items": [
+    {
+      "type": "folder",
+      "id": "folder-1",
+      "name": "Folder 1 - Variable Tests",
+      "items": [
+        {
+          "type": "request",
+          "id": "req-1",
+          "name": "Request 1: Local Variables",
+          "protocol": "http",
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/posts/1"
+          },
+          "preRequestScript": "console.log('=== Request 1 Pre-Request ===');\nquest.scope.variables.set('localVar', 'fromRequest1');\nquest.collection.variables.set('updatedByReq1', 'true');\nconsole.log('Set localVar and updatedByReq1');",
+          "postRequestScript": "console.log('=== Request 1 Post-Request ===');\n\nquest.test('Local variable exists in same request', () => {\n  const val = quest.scope.variables.get('localVar');\n  expect(val).to.equal('fromRequest1');\n});\n\nquest.test('Collection variable was updated', () => {\n  const val = quest.collection.variables.get('updatedByReq1');\n  expect(val).to.equal('true');\n});\n\nquest.test('Response is valid JSON', () => {\n  const body = quest.response.json();\n  expect(body).to.have.property('id');\n  expect(body.id).to.equal(1);\n});"
+        },
+        {
+          "type": "request",
+          "id": "req-2",
+          "name": "Request 2: Variable Isolation",
+          "protocol": "http",
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/posts/2"
+          },
+          "preRequestScript": "console.log('=== Request 2 Pre-Request ===');\nconst localVar = quest.scope.variables.get('localVar');\nconst updatedByReq1 = quest.collection.variables.get('updatedByReq1');\nconsole.log('localVar from req1:', localVar);\nconsole.log('updatedByReq1:', updatedByReq1);",
+          "postRequestScript": "quest.test('Local variable from req1 does NOT exist (isolated)', () => {\n  const val = quest.scope.variables.get('localVar');\n  expect(val).to.be.null;\n});\n\nquest.test('Collection variable from req1 DOES exist (shared)', () => {\n  const val = quest.collection.variables.get('updatedByReq1');\n  expect(val).to.equal('true');\n});\n\nquest.test('Original collection variable still exists', () => {\n  const val = quest.collection.variables.get('collectionVar');\n  expect(val).to.equal('fromCollection');\n});"
+        }
+      ]
+    },
+    {
+      "type": "folder",
+      "id": "folder-2",
+      "name": "Folder 2 - sendRequest Tests",
+      "items": [
+        {
+          "type": "request",
+          "id": "req-3",
+          "name": "Request 3: sendRequest Async/Await",
+          "protocol": "http",
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/posts/3"
+          },
+          "preRequestScript": "console.log('=== Request 3 Pre-Request ===');\nconsole.log('Testing sendRequest with async/await...');\n\n// Make an async request using await\nconst response = await quest.sendRequest({\n  url: 'https://jsonplaceholder.typicode.com/users/1',\n  method: 'GET'\n});\n\nconsole.log('Async response code:', response.status);\nconsole.log('Async response body sample:', response.body.substring(0, 50));\n\n// Parse and store\nconst userData = response.json();\nquest.global.variables.set('userName', userData.name);\nquest.global.variables.set('userEmail', userData.email);\n\nconsole.log('Stored user name:', userData.name);",
+          "postRequestScript": "quest.test('sendRequest (async/await) worked', () => {\n  const userName = quest.global.variables.get('userName');\n  expect(userName).to.not.be.null;\n  expect(userName.length).to.be.greaterThan(0);\n  console.log('Retrieved userName:', userName);\n});\n\nquest.test('User email was also stored', () => {\n  const userEmail = quest.global.variables.get('userEmail');\n  expect(userEmail).to.not.be.null;\n  expect(userEmail).to.include('@');\n  console.log('Retrieved userEmail:', userEmail);\n});\n\nquest.test('Main request also succeeded', () => {\n  expect(quest.response.status).to.equal(200);\n  const body = quest.response.json();\n  expect(body.id).to.equal(3);\n});"
+        },
+        {
+          "type": "request",
+          "id": "req-4",
+          "name": "Request 4: sendRequest Callback",
+          "protocol": "http",
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/posts/4"
+          },
+          "preRequestScript": "console.log('=== Request 4 Pre-Request ===');\nconsole.log('Testing sendRequest with callback pattern...');\n\n// Make request using callback pattern\nquest.sendRequest({\n  url: 'https://jsonplaceholder.typicode.com/todos/1',\n  method: 'GET'\n}, (err, response) => {\n  if (err) {\n    console.error('Callback error:', err);\n    throw new Error('sendRequest callback failed: ' + err.message);\n  }\n  \n  console.log('Callback response code:', response.status);\n  const todoData = response.json();\n  \n  quest.global.variables.set('todoTitle', todoData.title);\n  quest.global.variables.set('todoCompleted', String(todoData.completed));\n  \n  console.log('Stored todo title:', todoData.title);\n});\n\n// Note: Callback is async, so we continue here\nconsole.log('Callback registered, continuing...');",
+          "postRequestScript": "// Give callback time to execute\nawait new Promise(resolve => setTimeout(resolve, 100));\n\nquest.test('sendRequest (callback) worked', () => {\n  const todoTitle = quest.global.variables.get('todoTitle');\n  expect(todoTitle).to.not.be.null;\n  expect(todoTitle.length).to.be.greaterThan(0);\n  console.log('Retrieved todoTitle:', todoTitle);\n});\n\nquest.test('Todo completed status was stored', () => {\n  const completed = quest.global.variables.get('todoCompleted');\n  expect(completed).to.not.be.null;\n  expect(['true', 'false']).to.include(completed);\n  console.log('Retrieved todoCompleted:', completed);\n});\n\nquest.test('Main request also succeeded', () => {\n  expect(quest.response.status).to.equal(200);\n});"
+        }
+      ]
+    },
+    {
+      "type": "request",
+      "id": "req-5",
+      "name": "Request 5: Verify Cross-Folder Variables",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/5"
+      },
+      "postRequestScript": "quest.test('Collection variable from Folder 1 still exists', () => {\n  const val = quest.collection.variables.get('updatedByReq1');\n  expect(val).to.equal('true');\n});\n\nquest.test('Global variable from Folder 2 Request 3 exists', () => {\n  const userName = quest.global.variables.get('userName');\n  expect(userName).to.not.be.null;\n  console.log('Cross-folder userName:', userName);\n});\n\nquest.test('Global variable from Folder 2 Request 4 exists', () => {\n  const todoTitle = quest.global.variables.get('todoTitle');\n  expect(todoTitle).to.not.be.null;\n  console.log('Cross-folder todoTitle:', todoTitle);\n});\n\nquest.test('Response is valid', () => {\n  expect(quest.response.status).to.equal(200);\n  const body = quest.response.json();\n  expect(body.id).to.equal(5);\n});"
+      }
+    
+  ]
+}

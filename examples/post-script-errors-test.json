@@ -1,0 +1,67 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "script-errors",
+    "name": "Script Error Handling Test",
+    "version": "1.0.0",
+    "description": "Demonstrates that script errors should stop execution entirely"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Valid Script - Should Pass",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1"
+      },
+      "postRequestScript": "quest.test('This should pass', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Another passing test', () => {\n  const body = quest.response.json();\n  expect(body).to.have.property('title');\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "Script Error - Non-existent Method",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/2"
+      },
+      "postRequestScript": "// This should cause a SCRIPT ERROR, not a test failure\nquest.test('Test before error', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\n// ERROR: Accessing non-existent quest property\nconst badValue = quest.nonExistentProperty.getValue();\n\n// This test should never run because script errored above\nquest.test('Test after error - should not execute', () => {\n  expect(true).to.be.true;\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-3",
+      "name": "Script Error - Property Access",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/3"
+      },
+      "postRequestScript": "// ERROR: Accessing non-existent property\nconst badValue = quest.info.requestName;\n\nquest.test('This should not execute', () => {\n  expect(true).to.be.true;\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-4",
+      "name": "Script Error - Undefined Variable",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/4"
+      },
+      "postRequestScript": "// ERROR: Using undefined variable\nconst result = someUndefinedVariable.doSomething();\n\nquest.test('This should not execute', () => {\n  expect(true).to.be.true;\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-5",
+      "name": "Syntax Error in Script",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/5"
+      },
+      "postRequestScript": "quest.test('Syntax error example', () => {\n  // ERROR: Syntax error - missing closing parenthesis\n  expect(quest.response.status).to.equal(200\n});"
+    }
+  ]
+}

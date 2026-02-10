@@ -1,0 +1,105 @@
+{
+  "$schema": "https://apiquest.dev/schemas/collection-v1.0.json",
+  "info": {
+    "id": "col-deps-test",
+    "name": "Dependencies & Conditions Test",
+    "version": "1.0.0",
+    "description": "Test dependsOn, condition, and parallel execution with collection-level iteration"
+  },
+  "testData": [
+    {"env": "dev", "userId": 1, "expectedName": "Alice"},
+    {"env": "staging", "userId": 2, "expectedName": "Bob"}
+  ],
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-auth",
+      "name": "Get Auth Token",
+      "protocol": "http",
+      "dependsOn": [],
+      "data": {
+        "method": "POST",
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"auth\", \"body\": \"test\", \"userId\": 1}"
+        }
+      },
+      "postRequestScript": "quest.global.variables.set('authToken', 'token-' + quest.iteration.current);\nquest.test('Auth successful', () => {\n  expect(quest.response.status).to.equal(201);\n});"
+    },
+    {
+      "type": "folder",
+      "id": "folder-parallel",
+      "name": "Parallel Requests",
+      "items": [
+        {
+          "type": "request",
+          "id": "req-user",
+          "name": "Get User",
+          "protocol": "http",
+          "dependsOn": ["req-auth"],
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/users/{{userId}}"
+          },
+          "postRequestScript": "const user = quest.response.json();\nquest.global.variables.set('userName', user.name);\nquest.test('User found', () => {\n  expect(quest.response.status).to.equal(200);\n  expect(user.id).to.equal(parseInt(quest.variables.get('userId')));\n});"
+        },
+        {
+          "type": "request",
+          "id": "req-posts",
+          "name": "Get Posts",
+          "protocol": "http",
+          "dependsOn": ["req-auth"],
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/posts?userId={{userId}}"
+          },
+          "postRequestScript": "const posts = quest.response.json();\nquest.global.variables.set('postCount', posts.length.toString());\nquest.test('Posts retrieved', () => {\n  expect(quest.response.status).to.equal(200);\n  expect(posts).to.be.an('array');\n});"
+        },
+        {
+          "type": "request",
+          "id": "req-todos",
+          "name": "Get Todos",
+          "protocol": "http",
+          "dependsOn": ["req-auth"],
+          "data": {
+            "method": "GET",
+            "url": "https://jsonplaceholder.typicode.com/todos?userId={{userId}}"
+          },
+          "postRequestScript": "const todos = quest.response.json();\nquest.global.variables.set('todoCount', todos.length.toString());\nquest.test('Todos retrieved', () => {\n  expect(quest.response.status).to.equal(200);\n  expect(todos).to.be.an('array');\n});"
+        }
+      ]
+    },
+    {
+      "type": "request",
+      "id": "req-report",
+      "name": "Generate Report",
+      "protocol": "http",
+      "dependsOn": ["req-user", "req-posts", "req-todos"],
+      "condition": "quest.global.variables.get('postCount') !== null",
+      "data": {
+        "method": "POST",
+        "url": "https://jsonplaceholder.typicode.com/posts",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Report\", \"body\": \"Summary for user\", \"userId\": {{userId}}}"
+        }
+      },
+      "postRequestScript": "quest.test('Report created', () => {\n  expect(quest.response.status).to.equal(201);\n});\nquest.test('All data available from parallel requests', () => {\n  expect(quest.global.variables.get('userName')).to.not.be.null;\n  expect(quest.global.variables.get('postCount')).to.not.be.null;\n  expect(quest.global.variables.get('todoCount')).to.not.be.null;\n});\nconsole.log('Iteration ' + quest.iteration.current + ' complete for env: ' + quest.variables.get('env'));"
+    },
+    {
+      "type": "request",
+      "id": "req-conditional",
+      "name": "Only Run in Dev",
+      "protocol": "http",
+      "dependsOn": ["req-report"],
+      "condition": "quest.variables.get('env') === 'dev'",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/users/1"
+      },
+      "postRequestScript": "quest.test('Conditional execution works', () => {\n  expect(quest.variables.get('env')).to.equal('dev');\n  expect(quest.response.status).to.equal(200);\n});\nconsole.log('This request only runs in dev environment');"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "pre-request-error",
+    "name": "Pre-Request Script Error Test",
+    "version": "1.0.0",
+    "description": "Demonstrates that pre-request script errors stop execution BEFORE the request is made"
+  },
+  "protocol": "http",
+  "items": [
+    {
+      "type": "request",
+      "id": "req-1",
+      "name": "Pre-Request Script Error",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/1"
+      },
+      "preRequestScript": "// ERROR: This will cause a script error BEFORE the request executes\nconst badValue = someUndefinedVariable.method();",
+      "postRequestScript": "quest.test('This test should never run', () => {\n  expect(true).to.be.true;\n});"
+    },
+    {
+      "type": "request",
+      "id": "req-2",
+      "name": "This Request Should Never Execute",
+      "protocol": "http",
+      "data": {
+        "method": "GET",
+        "url": "https://jsonplaceholder.typicode.com/posts/2"
+      },
+      "postRequestScript": "quest.test('This should not run either', () => {\n  expect(quest.response.status).to.equal(200);\n});"
+    }
+  ]
+}

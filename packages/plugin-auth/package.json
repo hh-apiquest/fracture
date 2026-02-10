@@ -1,0 +1,61 @@
+{
+  "name": "@apiquest/plugin-auth",
+  "version": "1.0.0",
+  "description": "Authentication plugins for ApiQuest (Bearer, Basic, OAuth2, API Key)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c && tsc --emitDeclarationOnly",
+    "dev": "rollup -c --watch",
+    "test": "vitest"
+  },
+  "keywords": [
+    "apiquest",
+    "auth",
+    "authentication",
+    "bearer",
+    "oauth2"
+  ],
+  "author": "ApiQuest Contributors",
+  "license": "AGPL-3.0-or-later",
+  "peerDependencies": {
+    "@apiquest/types": "^1.0.0"
+  },
+  "dependencies": {
+    "got": "^14.6.6"
+  },
+  "devDependencies": {
+    "@apiquest/types": "workspace:*",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "rollup": "^4.0.0",
+    "tslib": "^2.7.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.18"
+  },
+  "apiquest": {
+    "type": "auth",
+    "runtime": [
+      "fracture"
+    ],
+    "capabilities": {
+      "provides": {
+        "authTypes": [
+          "bearer",
+          "basic",
+          "apikey",
+          "oauth2"
+        ]
+      },
+      "supports": {
+        "protocols": [
+          "http",
+          "graphql",
+          "grpc"
+        ]
+      }
+    }
+  }
+}
