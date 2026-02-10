@@ -1,6 +1,6 @@
 # ApiQuest Collection Schema Specification v1.0
 
-**Schema:** https://apiquest.dev/schemas/collection-v1.0.json  
+**Schema:** https://apiquest.net/schemas/collection-v1.0.json
 
 ## Overview
 
@@ -255,7 +255,7 @@ interface ValidationResult {
 
 ```json
 {
-  "$schema": "https://apiquest.dev/schemas/collection-v2.1.json",
+  "$schema": "https://apiquest.net/schemas/collection-v1.0.json",
   "info": {
     "id": "col-abc123",
     "name": "User API Test Suite",
@@ -1009,7 +1009,7 @@ Save example responses for documentation and mocking:
 
 ```json
 {
-  "$schema": "https://apiquest.dev/schemas/collection-v2.1.json",
+  "$schema": "https://apiquest.net/schemas/collection-v1.0.json",
   
   "info": {
     "id": "col-user-api",
