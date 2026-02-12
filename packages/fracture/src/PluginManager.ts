@@ -146,11 +146,9 @@ export class PluginManager {
 
     // Execute plugin with merged runtime options, event emitter, and logger
     const pluginLogger = this.logger.createLogger(`Protocol:${plugin.name}`);
-    const startTime = Date.now();
     const response = await plugin.execute(modifiedRequest, context, options, emitEvent, pluginLogger);
-    const duration = Date.now() - startTime;
     
-    this.logger.debug(`Plugin execution completed in ${duration}ms (status: ${response.status})`);
+    this.logger.debug(`Plugin execution completed in ${response.duration}ms (status: ${response.status})`);
     
     return response;
   }

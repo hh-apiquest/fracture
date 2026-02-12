@@ -686,6 +686,7 @@ export type PathType = 'collection:/' | `folder:/${string}` | `request:/${string
  * Event envelope that provides context for all events (except console)
  */
 export type EventEnvelope = {
+  id: string;  // Unique event ID
   path: PathType;
   pathType: NodeType;
   collectionInfo: CollectionInfo;
@@ -787,7 +788,7 @@ export interface EventPayloads {
   afterPostScript: EventEnvelope & { request: Request; path: string; response: ProtocolResponse; result: ScriptResult };
   
   // Test/Assertion
-  assertion: {
+  assertion: EventEnvelope & {
     test: TestResult;
     request?: Request;
     path?: string;
@@ -802,6 +803,7 @@ export interface EventPayloads {
   
   // Utility Events
   console: {
+    id: string;  // Unique event ID
     message: string;
     level: LogLevel;
     levelName?: 'error' | 'warn' | 'info' | 'debug' | 'trace';
@@ -811,6 +813,7 @@ export interface EventPayloads {
   };
   
   exception: {
+    id: string;  // Unique event ID
     error: Error;
     phase: 'collection-pre' | 'collection-post' | 'folder-pre' | 'folder-post' | 'prerequest' | 'postrequest' | 'request';
     request?: Request;

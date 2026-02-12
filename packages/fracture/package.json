@@ -1,14 +1,14 @@
 {
   "name": "@apiquest/fracture",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Core collection runner engine for ApiQuest with integrated CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
   "bin": {
-    "apiquest": "./bin/cli.js",
-    "fracture": "./bin/cli.js",
-    "quest": "./bin/cli.js"
+    "apiquest": "bin/cli.js",
+    "fracture": "bin/cli.js",
+    "quest": "bin/cli.js"
   },
   "scripts": {
     "build": "tsc",

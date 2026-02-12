@@ -1,60 +1,61 @@
 {
-  "name": "@apiquest/plugin-auth",
-  "version": "1.0.1",
-  "description": "Authentication plugins for ApiQuest (Bearer, Basic, OAuth2, API Key)",
-  "type": "module",
+  "name": "@apiquest/plugin-sse",
+  "version": "1.0.0",
+  "description": "SSE protocol plugin for Quest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "scripts": {
     "build": "rollup -c && tsc --emitDeclarationOnly",
     "dev": "rollup -c --watch",
     "test": "vitest"
   },
   "keywords": [
-    "apiquest",
-    "auth",
-    "authentication",
-    "bearer",
-    "oauth2"
+    "api",
+    "http",
+    "quest",
+    "plugin"
   ],
-  "author": "ApiQuest Contributors",
+  "author": "ApiQuest",
   "license": "AGPL-3.0-or-later",
-  "peerDependencies": {
-    "@apiquest/types": "^1.0.0"
-  },
   "dependencies": {
-    "got": "^14.6.6"
+    "got": "^14.6.6",
+    "hpagent": "^1.2.0"
   },
   "devDependencies": {
     "@apiquest/types": "workspace:*",
     "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-typescript": "^11.0.0",
+    "@types/node": "^20.10.6",
     "rollup": "^4.0.0",
-    "tslib": "^2.7.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.3.3",
     "vitest": "^4.0.18"
   },
+  "peerDependencies": {
+    "@apiquest/types": "^1.0.0"
+  },
   "apiquest": {
-    "type": "auth",
+    "type": "protocol",
     "runtime": [
       "fracture"
     ],
     "capabilities": {
       "provides": {
-        "authTypes": [
-          "bearer",
-          "basic",
-          "apikey",
-          "oauth2"
+        "protocols": [
+          "sse"
         ]
       },
       "supports": {
-        "protocols": [
-          "http",
-          "graphql",
-          "grpc"
-        ]
+        "authTypes": [
+          "bearer",
+          "basic",
+          "oauth2",
+          "apikey",
+          "digest",
+          "ntlm"
+        ],
+        "strictAuthList": false
       }
     }
   }

@@ -27,9 +27,9 @@ __metadata:
     typescript: "npm:^5.3.3"
     vitest: "npm:^4.0.18"
   bin:
-    apiquest: ./bin/cli.js
-    fracture: ./bin/cli.js
-    quest: ./bin/cli.js
+    apiquest: bin/cli.js
+    fracture: bin/cli.js
+    quest: bin/cli.js
   languageName: unknown
   linkType: soft
 
@@ -70,6 +70,25 @@ __metadata:
 "@apiquest/plugin-http@workspace:packages/plugin-http":
   version: 0.0.0-use.local
   resolution: "@apiquest/plugin-http@workspace:packages/plugin-http"
+  dependencies:
+    "@apiquest/types": "workspace:*"
+    "@rollup/plugin-commonjs": "npm:^25.0.0"
+    "@rollup/plugin-node-resolve": "npm:^15.0.0"
+    "@rollup/plugin-typescript": "npm:^11.0.0"
+    "@types/node": "npm:^20.10.6"
+    got: "npm:^14.6.6"
+    hpagent: "npm:^1.2.0"
+    rollup: "npm:^4.0.0"
+    typescript: "npm:^5.3.3"
+    vitest: "npm:^4.0.18"
+  peerDependencies:
+    "@apiquest/types": ^1.0.0
+  languageName: unknown
+  linkType: soft
+
+"@apiquest/plugin-sse@workspace:packages/plugin-sse":
+  version: 0.0.0-use.local
+  resolution: "@apiquest/plugin-sse@workspace:packages/plugin-sse"
   dependencies:
     "@apiquest/types": "workspace:*"
     "@rollup/plugin-commonjs": "npm:^25.0.0"

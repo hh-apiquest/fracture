@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import type {
   Collection,
   RunOptions,
@@ -119,7 +120,7 @@ export class CollectionRunner extends EventEmitter {
         level = 'error';
         cleanMessage = message.replace('[ERROR] ', '');
       }
-      this.emit('console', { message: cleanMessage, level });
+      this.emit('console', { id: randomUUID(), message: cleanMessage, level });
     }
   }
 
@@ -163,6 +164,7 @@ export class CollectionRunner extends EventEmitter {
     const pathType = path === 'collection:/' ? 'collection' : path.startsWith('folder:/') ? 'folder' : 'request';
     
     const envelope: EventEnvelope = {
+      id: randomUUID(),
       path,
       pathType,
       collectionInfo
@@ -1048,7 +1050,6 @@ export class CollectionRunner extends EventEmitter {
     flags: { skip: boolean; bail: boolean }
   ): Promise<RequestResult> {
     const request = node.item as Request;
-    const requestStart = Date.now();
 
     // NOTE: Do NOT set context.currentRequest here in parallel mode!
     // It will be overwritten by other parallel requests before scripts execute.
@@ -1262,14 +1263,13 @@ export class CollectionRunner extends EventEmitter {
       );
       context.currentResponse = response;
       
-      // Emit afterRequest event
-      const requestDuration = Date.now() - requestStart;
+      // Emit afterRequest event with duration from plugin (excludes delay)
       const afterRequestEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
       this.emit('afterRequest', {
         ...afterRequestEnvelope,
         request,
         response,
-        duration: requestDuration
+        duration: response.duration
       });
 
       // Add preliminary execution record to history
@@ -1357,8 +1357,6 @@ export class CollectionRunner extends EventEmitter {
       const allTests = [...pluginEventTests, ...scriptResult.tests];
       executionRecord.tests = allTests;
 
-      const duration = Date.now() - requestStart;
-
       const result: RequestResult = {
         requestId: request.id,
         requestName: request.name,
@@ -1366,7 +1364,7 @@ export class CollectionRunner extends EventEmitter {
         success: isNullOrEmpty(response.error),
         response,
         tests: allTests,
-        duration,
+        duration: response.duration,
         iteration: context.iterationCurrent
       };
 
@@ -1390,7 +1388,6 @@ export class CollectionRunner extends EventEmitter {
       
       return result;
     } catch (error) {
-      const duration = Date.now() - requestStart;
       const err = error as ErrorWithPhase & { message?: string };
 
       const result: RequestResult = {
@@ -1399,13 +1396,14 @@ export class CollectionRunner extends EventEmitter {
         path: node.path,
         success: false,
         tests: [],
-        duration,
+        duration: context.currentResponse?.duration ?? 0,
         scriptError: err.message ?? String(error),
         iteration: context.iterationCurrent
       };
 
       const phase = err.phase ?? 'request';
       this.emit('exception', {
+        id: randomUUID(),
         error,
         phase,
         request,

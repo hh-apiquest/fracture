@@ -1,0 +1,32 @@
+{
+  "$schema": "https://apiquest.net/schema/v1.0.json",
+  "info": {
+    "id": "sse-test",
+    "name": "SSE Test Collection",
+    "version": "1.0.0",
+    "description": "Test collection for Server-Sent Events (SSE) protocol"
+  },
+  "protocol": "sse",
+  "items": [
+    {
+      "type": "request",
+      "id": "sse-dev-test",
+      "name": "SSE Test (sse.dev)",
+      "data": {
+        "url": "https://sse.dev/test",
+        "timeout": 5000
+      },
+      "scripts": [
+        {
+          "event": "onMessage",
+          "script": "quest.test('Message ' + quest.event.index, () => { expect(quest.event.data).to.have.property('data'); });"
+        },
+        {
+          "event": "onComplete",
+          "script": "quest.test('Total messages received', () => { expect(quest.event.messageCount).to.be.greaterThan(0); });"
+        }
+      ],
+      "postRequestScript": "quest.test('Stream completed successfully', () => { expect(quest.response.status).to.equal(200); });"
+    }
+  ]
+}

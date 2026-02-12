@@ -143,8 +143,17 @@
     "runtimeOptions": {
       "type": "object",
       "properties": {
+        "strictMode": {
+          "type": "boolean",
+          "description": "Set to false to disable strict validation mode (default: true)"
+        },
         "execution": {
           "$ref": "#/definitions/executionOptions"
+        },
+        "logLevel": {
+          "type": "string",
+          "enum": ["error", "warn", "info", "debug", "trace"],
+          "description": "Log level for execution (default: info)"
         },
         "libraries": {
           "type": "array",

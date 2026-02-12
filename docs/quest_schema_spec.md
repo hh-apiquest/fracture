@@ -59,6 +59,9 @@ interface Collection {
 }
 
 interface RuntimeOptions {
+  // Validation
+  strictMode?: boolean;  // Enable strict validation mode (default: true)
+  
   // Execution control
   execution?: {
     allowParallel?: boolean;    // Enable parallel execution (default: false)

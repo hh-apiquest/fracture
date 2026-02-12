@@ -1,4 +1,5 @@
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import { ILogger, LogLevel } from '@apiquest/types';
 
 /**
@@ -71,6 +72,7 @@ export class Logger implements ILogger {
 
     if (this.emitter !== null && this.emitter !== undefined) {
       this.emitter.emit('console', {
+        id: randomUUID(),
         level,
         levelName,
         component: this.component,
