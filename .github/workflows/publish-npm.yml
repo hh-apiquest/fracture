@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
   
 jobs:
   test:
@@ -60,44 +61,28 @@ jobs:
       - name: Build all packages
         run: yarn build
       
+      # @apiquest/types
       - name: Publish @apiquest/types
         working-directory: ./packages/types
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+        run: npm publish --provenance --access public
       
-      - name: Publish @apiquest/fracture
-        working-directory: ./packages/fracture
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+      # Commented out for testing
+      # - name: Publish @apiquest/fracture
+      #   working-directory: ./packages/fracture
+      #   run: npm publish --provenance --access public
       
-      - name: Publish @apiquest/plugin-http
-        working-directory: ./packages/plugin-http
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+      # - name: Publish @apiquest/plugin-http
+      #   working-directory: ./packages/plugin-http
+      #   run: npm publish --provenance --access public
       
-      - name: Publish @apiquest/plugin-auth
-        working-directory: ./packages/plugin-auth
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+      # - name: Publish @apiquest/plugin-auth
+      #   working-directory: ./packages/plugin-auth
+      #   run: npm publish --provenance --access public
       
-      - name: Publish @apiquest/plugin-vault-file
-        working-directory: ./packages/plugin-vault-file
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+      # - name: Publish @apiquest/plugin-vault-file
+      #   working-directory: ./packages/plugin-vault-file
+      #   run: npm publish --provenance --access public
       
-      - name: Publish @apiquest/plugin-graphql
-        working-directory: ./packages/plugin-graphql
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        continue-on-error: false
+      # - name: Publish @apiquest/plugin-graphql
+      #   working-directory: ./packages/plugin-graphql
+      #   run: npm publish --provenance --access public
