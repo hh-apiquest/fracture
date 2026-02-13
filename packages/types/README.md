@@ -27,11 +27,13 @@ import type {
 ## Type Exports
 
 - **Collection Types:** Collection, Request, Folder, CollectionItem, CollectionInfo
-- **Auth Types:** Auth, BearerAuth, BasicAuth, ApiKeyAuth, OAuth2Auth
+- **Auth Types:** Auth
 - **Environment:** Environment, Variable
-- **Runtime:** RunOptions, RunResult, RuntimeOptions
+- **Runtime:** RunOptions, RunResult, RuntimeOptions, ExecutionOptions
 - **Plugins:** IProtocolPlugin, IAuthPlugin, IValueProviderPlugin
-- **Execution:** ExecutionContext, ProtocolResponse, ValidationResult
+- **Execution:** ExecutionContext, ProtocolResponse, ExecutionRecord, TestResult
+- **Logging:** ILogger, LogLevel
+- **Cookies:** ICookieJar, Cookie, CookieSetOptions, CookieJarOptions
 
 ## Schema
 

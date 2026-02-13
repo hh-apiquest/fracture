@@ -1,10 +1,15 @@
 {
   "name": "@apiquest/plugin-vault-file",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "File-based vault provider plugin for ApiQuest (JSON, readonly)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hh-apiquest/fracture.git",
+    "directory": "packages/plugin-vault-file"
+  },
   "scripts": {
     "build": "rollup -c && tsc --emitDeclarationOnly",
     "dev": "rollup -c --watch",

@@ -1,10 +1,15 @@
 {
   "name": "@apiquest/plugin-graphql",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "GraphQL protocol plugin for ApiQuest",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hh-apiquest/fracture.git",
+    "directory": "packages/plugin-graphql"
+  },
   "scripts": {
     "build": "rollup -c && tsc --emitDeclarationOnly",
     "dev": "rollup -c --watch",

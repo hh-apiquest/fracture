@@ -1,6 +1,6 @@
 {
   "name": "@apiquest/fracture",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Core collection runner engine for ApiQuest with integrated CLI",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,6 +9,11 @@
     "apiquest": "bin/cli.js",
     "fracture": "bin/cli.js",
     "quest": "bin/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hh-apiquest/fracture.git",
+    "directory": "packages/fracture"
   },
   "scripts": {
     "build": "tsc",

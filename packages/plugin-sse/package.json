@@ -1,10 +1,15 @@
 {
   "name": "@apiquest/plugin-sse",
-  "version": "1.0.3",
-  "description": "SSE protocol plugin for Quest",
+  "version": "1.0.4",
+  "description": "SSE protocol plugin for ApiQuest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hh-apiquest/fracture.git",
+    "directory": "packages/plugin-sse"
+  },
   "scripts": {
     "build": "rollup -c && tsc --emitDeclarationOnly",
     "dev": "rollup -c --watch",
