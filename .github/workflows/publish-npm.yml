@@ -71,27 +71,34 @@ jobs:
       - name: Publish @apiquest/types
         working-directory: ./packages/types
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/fracture
         working-directory: ./packages/fracture
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/plugin-http
         working-directory: ./packages/plugin-http
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/plugin-auth
         working-directory: ./packages/plugin-auth
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/plugin-vault-file
         working-directory: ./packages/plugin-vault-file
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/plugin-graphql
         working-directory: ./packages/plugin-graphql
         run: npm publish --provenance --access public
+        continue-on-error: true
       
       - name: Publish @apiquest/plugin-sse
         working-directory: ./packages/plugin-sse
         run: npm publish --provenance --access public
+        continue-on-error: true
