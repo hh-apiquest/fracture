@@ -5,7 +5,11 @@ Server-Sent Events (SSE) protocol plugin for ApiQuest. Provides support for test
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @apiquest/plugin-sse
+
+# Or using fracture CLI
+fracture plugin install sse
 ```
 
 ## Features

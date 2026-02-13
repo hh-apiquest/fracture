@@ -5,7 +5,11 @@ File-based vault provider plugin for ApiQuest. Provides secure secret storage us
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @apiquest/plugin-vault-file
+
+# Or using fracture CLI
+fracture plugin install vault-file
 ```
 
 ## Features

@@ -5,7 +5,11 @@ GraphQL protocol plugin for ApiQuest. Provides support for GraphQL queries, muta
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @apiquest/plugin-graphql
+
+# Or using fracture CLI
+fracture plugin install graphql
 ```
 
 ## Features

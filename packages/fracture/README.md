@@ -10,17 +10,22 @@ npm install -g @apiquest/fracture
 
 ### Plugins
 
-The runner requires protocol plugins to execute requests. Install at least one:
+Protocol and authentication plugins extend fracture capabilities:
 
 ```bash
-# HTTP/REST APIs
+# Using fracture CLI (recommended)
+fracture plugin install http        # HTTP/REST APIs
+fracture plugin install auth        # Authentication
+fracture plugin install vault-file  # File-based secrets vault
+fracture plugin install graphql     # GraphQL
+fracture plugin install sse         # Server-Sent Events
+
+# Or using npm
 npm install -g @apiquest/plugin-http
-
-# Authentication (Bearer, Basic, OAuth2, API Key)
 npm install -g @apiquest/plugin-auth
-
-# File-based vault for secrets
 npm install -g @apiquest/plugin-vault-file
+npm install -g @apiquest/plugin-graphql
+npm install -g @apiquest/plugin-sse
 ```
 
 ## Quick Start

@@ -5,7 +5,11 @@ HTTP/REST protocol plugin for ApiQuest. Provides comprehensive HTTP request exec
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @apiquest/plugin-http
+
+# Or using fracture CLI
+fracture plugin install http
 ```
 
 **Note:** This plugin is required for HTTP/REST API testing with `@apiquest/fracture`.

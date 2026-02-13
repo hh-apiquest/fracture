@@ -1,7 +1,5 @@
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
-import react from 'eslint-plugin-react';
-import reactHooks from 'eslint-plugin-react-hooks';
 
 export default [
   {
@@ -19,13 +17,8 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tseslint,
-      'react': react,
-      'react-hooks': reactHooks
     },
     settings: {
-      react: {
-        version: 'detect'
-      }
     },
     rules: {
       // Strict 'any' prevention
@@ -69,12 +62,6 @@ export default [
       // Modern patterns
       '@typescript-eslint/prefer-nullish-coalescing': 'error',
       '@typescript-eslint/prefer-optional-chain': 'error',
-
-      // React rules (only enforced on .tsx files)
-      'react/react-in-jsx-scope': 'off', // Not needed with React 17+
-      'react/prop-types': 'off', // We use TypeScript for prop validation
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn'
     }
   },
   {

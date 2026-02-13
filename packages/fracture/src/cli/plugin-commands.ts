@@ -80,6 +80,7 @@ export function addPluginCommands(program: Command): void {
             console.log(`    Description: ${plugin.description}`);
           }
           printCapabilities(plugin.provides, '    ');
+          console.log('');
         }
 
         console.log('');
@@ -249,7 +250,7 @@ interface AvailablePlugin {
 
 async function fetchAvailablePlugins(): Promise<AvailablePlugin[]> {
   const searchUrl = new URL('https://registry.npmjs.org/-/v1/search');
-  searchUrl.searchParams.set('text', 'scope:@apiquest plugin-');
+  searchUrl.searchParams.set('text', '@apiquest/plugin');
   searchUrl.searchParams.set('size', '250');
 
   const response = await fetch(searchUrl.toString(), {

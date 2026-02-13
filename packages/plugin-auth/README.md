@@ -5,7 +5,11 @@ Authentication plugins for ApiQuest. Provides Bearer, Basic, OAuth2, and API Key
 ## Installation
 
 ```bash
+# Using npm
 npm install -g @apiquest/plugin-auth
+
+# Or using fracture CLI
+fracture plugin install auth
 ```
 
 ## Supported Authentication Types
