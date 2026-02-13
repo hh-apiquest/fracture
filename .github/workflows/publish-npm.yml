@@ -54,7 +54,7 @@ jobs:
         with:
           node-version: '20.x'
           cache: 'yarn'
-          registry-url: 'https://registry.npmjs.org'
+          # registry-url: 'https://registry.npmjs.org'
 
       - name: Verify npm version
         run: npm --version
