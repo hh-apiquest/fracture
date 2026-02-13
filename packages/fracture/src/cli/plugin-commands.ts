@@ -21,6 +21,7 @@ export function addPluginCommands(program: Command): void {
     .description('Install a plugin')
     .argument('<names...>', 'Plugin name(s) to install')
     .action(async (names: string[]) => {
+      let hasErrors = false;
       for (const name of names) {
         const packageName = name.startsWith('@') ? name : `@apiquest/plugin-${name}`;
         
@@ -29,11 +30,15 @@ export function addPluginCommands(program: Command): void {
         try {
           // Use npm to install globally
           await execAsync(`npm install -g ${packageName}`);
-          console.log(`✓ ${packageName} installed`);
+          console.log(`${packageName} installed`);
         } catch (error) {
+          hasErrors = true;
           const err = error as { message?: string };
-          console.error(`✗ Failed to install ${packageName}:`, err.message ?? String(error));
+          console.error(`Failed to install ${packageName}:`, err.message ?? String(error));
         }
+      }
+      if (hasErrors) {
+        process.exit(4);
       }
     });
 
@@ -96,6 +101,7 @@ export function addPluginCommands(program: Command): void {
     .description('Remove a plugin')
     .argument('<names...>', 'Plugin name(s) to remove')
     .action(async (names: string[]) => {
+      let hasErrors = false;
       for (const name of names) {
         const packageName = name.startsWith('@') ? name : `@apiquest/plugin-${name}`;
         
@@ -103,11 +109,15 @@ export function addPluginCommands(program: Command): void {
         
         try {
           await execAsync(`npm uninstall -g ${packageName}`);
-          console.log(`✓ ${packageName} removed`);
+          console.log(`${packageName} removed`);
         } catch (error) {
+          hasErrors = true;
           const err = error as { message?: string };
-          console.error(`✗ Failed to remove ${packageName}:`, err.message ?? String(error));
+          console.error(`Failed to remove ${packageName}:`, err.message ?? String(error));
         }
+      }
+      if (hasErrors) {
+        process.exit(4);
       }
     });
 
@@ -117,16 +127,18 @@ export function addPluginCommands(program: Command): void {
     .description('Update plugin(s)')
     .argument('[names...]', 'Plugin name(s) to update (all if not specified)')
     .action(async (names: string[]) => {
+      let hasErrors = false;
       if (names.length === 0) {
         // Update all @apiquest plugins
         console.log('Updating all @apiquest plugins...');
         
         try {
           await execAsync('npm update -g @apiquest/*');
-          console.log('✓ All plugins updated');
+          console.log('All plugins updated');
         } catch (error) {
+          hasErrors = true;
           const err = error as { message?: string };
-          console.error('✗ Failed to update plugins:', err.message ?? String(error));
+          console.error('Failed to update plugins:', err.message ?? String(error));
         }
       } else {
         for (const name of names) {
@@ -136,12 +148,16 @@ export function addPluginCommands(program: Command): void {
           
           try {
             await execAsync(`npm update -g ${packageName}`);
-            console.log(`✓ ${packageName} updated`);
+            console.log(`${packageName} updated`);
           } catch (error) {
+            hasErrors = true;
             const err = error as { message?: string };
-            console.error(`✗ Failed to update ${packageName}:`, err.message ?? String(error));
+            console.error(`Failed to update ${packageName}:`, err.message ?? String(error));
           }
         }
+      }
+      if (hasErrors) {
+        process.exit(4);
       }
     });
 }

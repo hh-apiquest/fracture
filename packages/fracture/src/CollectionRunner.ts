@@ -36,6 +36,7 @@ import { isNullOrEmpty, isNullOrWhitespace, hasItems } from './utils.js';
 import type { ErrorWithPhase } from './CollectionRunner.types.js';
 import { TaskGraph, type TaskNode } from './TaskGraph.js';
 import { DagScheduler, type DagExecutionCallbacks } from './DagScheduler.js';
+import { LibraryLoader } from './LibraryLoader.js';
 
 export class CollectionRunner extends EventEmitter {
   private variableResolver: VariableResolver;
@@ -55,6 +56,8 @@ export class CollectionRunner extends EventEmitter {
   private bailEnabled = false;
   private abortReason?: string;
   private shouldDelayNextRequest = false;
+  private libraryLoader: LibraryLoader;
+  private loadedLibraries: Map<string, unknown> = new Map();
 
   constructor(options?: CollectionRunnerOptions) {
     super();
@@ -70,6 +73,7 @@ export class CollectionRunner extends EventEmitter {
     this.collectionValidator = new CollectionValidator(this.pluginManager, this.logger);
     this.testCounter = new TestCounter(this.pluginManager, this.logger);
     this.scriptEngine = new ScriptEngine(this.logger);
+    this.libraryLoader = new LibraryLoader(this.logger);
     
     // Phase 1: Resolve plugins if directories provided (fast - just scans, no loading)
     if (options?.pluginsDir !== undefined) {
@@ -243,6 +247,25 @@ export class CollectionRunner extends EventEmitter {
 
     // Merge runtime options (needed for validation)
     const runtimeOptions = this.mergeOptions(collection.options, options);
+
+    // Validate external libraries flag
+    if (runtimeOptions.libraries !== undefined && runtimeOptions.libraries.length > 0) {
+      if (options.allowExternalLibraries !== true) {
+        throw new Error(
+          `Collection defines external libraries but --allow-external-libraries flag is not enabled. ` +
+          `External libraries (npm/file/cdn) pose security risks and must be explicitly allowed. ` +
+          `Use --allow-external-libraries to enable this feature.`
+        );
+      }
+      this.logger.info(`External libraries enabled: ${runtimeOptions.libraries.length} libraries to load`);
+      
+      // Load external libraries
+      this.loadedLibraries = await this.libraryLoader.loadLibraries(runtimeOptions.libraries);
+      
+      // Recreate script engine with loaded libraries
+      this.scriptEngine = new ScriptEngine(this.logger, this.loadedLibraries);
+      this.logger.info(`Loaded ${this.loadedLibraries.size} external libraries`);
+    }
 
     if (options.signal !== undefined) {
       this.ownsController = false;
