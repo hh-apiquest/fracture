@@ -460,6 +460,7 @@ export interface PluginPackageJson {
   name: string;
   version: string;
   main?: string;
+  description?: string;
   apiquest?: {
     runtime?: string[] | string;
     type: string;
@@ -467,7 +468,12 @@ export interface PluginPackageJson {
       provides?: {
         protocols?: string[];
         authTypes?: string[];
-        provider?: string;
+        valueTypes?: string[];
+        reportTypes?: string[];
+      };
+      supports?: {
+        authTypes?: string[];
+        strictAuthList?: boolean;
       };
     };
   };

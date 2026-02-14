@@ -1,11 +1,83 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PluginInstaller } from '../src/cli/plugin-installer.js';
 import type { PluginRequirements } from '../src/CollectionAnalyzer.js';
 import type { ResolvedPlugin } from '../src/PluginResolver.js';
+import * as pluginRegistry from '../src/cli/plugin-registry.js';
 
 describe('PluginInstaller', () => {
+  // Mock registry data - matches structure returned by fetchAvailablePlugins()
+  // which is PluginPackageJson with name/version at top level
+  const mockRegistryPlugins = [
+    {
+      name: '@apiquest/plugin-http',
+      version: '1.0.0',
+      apiquest: {
+        type: 'protocol',
+        runtime: ['fracture'],
+        capabilities: {
+          provides: { protocols: ['http', 'https'] }
+        }
+      }
+    },
+    {
+      name: '@apiquest/plugin-grpc',
+      version: '1.0.0',
+      apiquest: {
+        type: 'protocol',
+        runtime: ['fracture'],
+        capabilities: {
+          provides: { protocols: ['grpc'] }
+        }
+      }
+    },
+    {
+      name: '@apiquest/plugin-auth',
+      version: '1.0.0',
+      apiquest: {
+        type: 'auth',
+        runtime: ['fracture'],
+        capabilities: {
+          provides: { authTypes: ['bearer', 'basic', 'apikey', 'oauth2'] }
+        }
+      }
+    },
+    {
+      name: '@apiquest/plugin-vault-file',
+      version: '1.0.0',
+      apiquest: {
+        type: 'value',
+        runtime: ['fracture'],
+        capabilities: {
+          provides: { valueTypes: ['vault:file'] }
+        }
+      }
+    },
+    {
+      name: '@apiquest/plugin-vault-env',
+      version: '1.0.0',
+      apiquest: {
+        type: 'value',
+        runtime: ['fracture'],
+        capabilities: {
+          provides: { valueTypes: ['vault:env'] }
+        }
+      }
+    }
+  ];
+
+  beforeEach(() => {
+    // Mock the registry fetch function
+    vi.spyOn(pluginRegistry, 'fetchAvailablePlugins').mockResolvedValue(mockRegistryPlugins);
+  });
+
+  afterEach(() => {
+    // Clear cache and restore mocks
+    PluginInstaller.clearCache();
+    vi.restoreAllMocks();
+  });
+
   describe('findMissingPlugins', () => {
-    it('should find missing protocol plugins', () => {
+    it('should find missing protocol plugins', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(['http', 'grpc']),
         authTypes: new Set(),
@@ -23,14 +95,14 @@ describe('PluginInstaller', () => {
         }
       ];
       
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-grpc')).toBe(true);
       expect(missing.has('@apiquest/plugin-http')).toBe(false);
       expect(missing.size).toBe(1);
     });
     
-    it('should find missing auth plugins', () => {
+    it('should find missing auth plugins', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(),
         authTypes: new Set(['bearer', 'basic']),
@@ -39,13 +111,13 @@ describe('PluginInstaller', () => {
       
       const resolved: ResolvedPlugin[] = [];
       
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-auth')).toBe(true);
       expect(missing.size).toBe(1);
     });
     
-    it('should find missing value provider plugins', () => {
+    it('should find missing value provider plugins', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(),
         authTypes: new Set(),
@@ -59,18 +131,18 @@ describe('PluginInstaller', () => {
           type: 'value',
           path: '/path',
           entryPoint: 'index.js',
-          provider: 'vault:file'
+          valueTypes: ['vault:file']
         }
       ];
       
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-vault-env')).toBe(true);
       expect(missing.has('@apiquest/plugin-vault-file')).toBe(false);
       expect(missing.size).toBe(1);
     });
     
-    it('should return empty set when all plugins are resolved', () => {
+    it('should return empty set when all plugins are resolved', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(['http']),
         authTypes: new Set(['bearer']),
@@ -96,12 +168,12 @@ describe('PluginInstaller', () => {
         }
       ];
       
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.size).toBe(0);
     });
     
-    it('should handle multiple protocols from same plugin', () => {
+    it('should handle multiple protocols from same plugin', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(['http', 'https']),
         authTypes: new Set(),
@@ -119,14 +191,14 @@ describe('PluginInstaller', () => {
         }
       ];
       
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.size).toBe(0);
     });
   });
   
-  describe('Package name mapping', () => {
-    it('should map protocol to correct package name', () => {
+  describe('Package name mapping via registry', () => {
+    it('should find package for protocol from registry metadata', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(['http']),
         authTypes: new Set(),
@@ -134,12 +206,12 @@ describe('PluginInstaller', () => {
       };
       
       const resolved: ResolvedPlugin[] = [];
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-http')).toBe(true);
     });
     
-    it('should map auth type to plugin-auth package', () => {
+    it('should find package for auth type from registry metadata', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(),
         authTypes: new Set(['bearer']),
@@ -147,12 +219,12 @@ describe('PluginInstaller', () => {
       };
       
       const resolved: ResolvedPlugin[] = [];
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-auth')).toBe(true);
     });
     
-    it('should map value provider with colon to hyphen', () => {
+    it('should find package for value provider from registry metadata', async () => {
       const requirements: PluginRequirements = {
         protocols: new Set(),
         authTypes: new Set(),
@@ -160,7 +232,7 @@ describe('PluginInstaller', () => {
       };
       
       const resolved: ResolvedPlugin[] = [];
-      const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+      const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
       
       expect(missing.has('@apiquest/plugin-vault-file')).toBe(true);
     });

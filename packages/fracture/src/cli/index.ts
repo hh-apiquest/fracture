@@ -229,7 +229,7 @@ program
         const resolved = await resolver.scanDirectories(pluginDirs);
         
         // Find missing plugins
-        const missing = PluginInstaller.findMissingPlugins(requirements, resolved);
+        const missing = await PluginInstaller.findMissingPlugins(requirements, resolved);
         
         if (missing.size > 0) {
           console.log(`Installing plugins: ${Array.from(missing).join(', ')}`);

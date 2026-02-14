@@ -42,7 +42,7 @@ export class LibraryLoader {
         this.logger.debug(`Loading library: ${library.name} from ${library.source.type}`);
         const module = await this.loadLibrary(library);
         loaded.set(library.name, module.module);
-        this.logger.info(`Loaded library: ${library.name}`);
+        this.logger.debug(`Loaded library: ${library.name}`);
       } catch (error) {
         this.logger.error(`Failed to load library ${library.name}:`, error);
         throw new Error(`Failed to load external library '${library.name}': ${error instanceof Error ? error.message : String(error)}`);

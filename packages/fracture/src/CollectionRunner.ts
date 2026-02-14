@@ -233,7 +233,7 @@ export class CollectionRunner extends EventEmitter {
     await this.pluginLoader.loadRequiredPlugins(this.resolvedPlugins, requirements);
     this.logger.debug('Required plugins loaded');
 
-    this.logger.info(`Starting collection: ${collection.info.name}`);
+    this.logger.debug(`Starting collection: ${collection.info.name}`);
     this.logger.debug(`Collection ID: ${collection.info.id}, Protocol: ${collection.protocol}`);
 
     // Validate and cache protocol plugin
@@ -257,14 +257,14 @@ export class CollectionRunner extends EventEmitter {
           `Use --allow-external-libraries to enable this feature.`
         );
       }
-      this.logger.info(`External libraries enabled: ${runtimeOptions.libraries.length} libraries to load`);
+      this.logger.debug(`External libraries enabled: ${runtimeOptions.libraries.length} libraries to load`);
       
       // Load external libraries
       this.loadedLibraries = await this.libraryLoader.loadLibraries(runtimeOptions.libraries);
       
       // Recreate script engine with loaded libraries
       this.scriptEngine = new ScriptEngine(this.logger, this.loadedLibraries);
-      this.logger.info(`Loaded ${this.loadedLibraries.size} external libraries`);
+      this.logger.debug(`Loaded ${this.loadedLibraries.size} external libraries`);
     }
 
     if (options.signal !== undefined) {
@@ -277,7 +277,7 @@ export class CollectionRunner extends EventEmitter {
     } else {
       this.ownsController = true;
       this.abortController = new AbortController();
-      this.logger.info('Created internal abort controller');
+      this.logger.debug('Created internal abort controller');
     }
 
     this.abortReason = undefined;
