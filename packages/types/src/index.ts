@@ -274,6 +274,12 @@ export interface ExecutionHistoryEntry {
   requestIteration: number;
 }
 
+export interface HistoryFilterCriteria {
+  path?: string;
+  name?: string;
+  iteration?: number;
+  id?: string;
+}
 // ============================================================================
 // Plugin Events
 // ============================================================================
@@ -835,4 +841,29 @@ export interface EventPayloads {
     path?: string;
     response?: ProtocolResponse;
   };
+}
+
+//used by sendRequest
+export interface SendRequest {
+  url: string;
+  method?: string;
+  header?: Record<string, string>;
+  headers?: Record<string, string>;
+  body?: string | SendRequestBody;
+}
+
+export interface SendRequestBody {
+  mode?: 'raw' | 'urlencoded' | 'formdata';
+  raw?: string;
+  kv?: Array<{ key: string; value: string; type?: 'text' | 'binary'; description?: string }>;
+}
+
+export interface SendRequestResponse {
+  status: number;
+  statusText: string;
+  body: string;
+  headers: Record<string, string | string[]>;
+  time: number;
+  json(): unknown | null;
+  text(): string;
 }

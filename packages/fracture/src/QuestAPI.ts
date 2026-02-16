@@ -2,18 +2,18 @@ import type { ExecutionContext, TestResult, Cookie, CookieSetOptions } from '@ap
 import { ScriptType } from '@apiquest/types';
 import { createQuestTestAPI } from './QuestTestAPI.js';
 import type { CookieJar } from './CookieJar.js';
-import type { RequestConfig, ResponseObject, HistoryFilterCriteria } from './QuestAPI.types.js';
+import type { SendRequest, SendRequestResponse, HistoryFilterCriteria } from '@apiquest/types';
 import { isNullOrWhitespace } from './utils.js';
 
 /**
  * Helper: Execute HTTP request and return response object
  * Used by quest.sendRequest() to make requests from scripts
  */
-async function executeHttpRequest(config: RequestConfig, signal: AbortSignal): Promise<ResponseObject> {
+async function executeHttpRequest(request: SendRequest, signal: AbortSignal): Promise<SendRequestResponse> {
   // Use native fetch
-  const url = config.url;
-  const method = config.method ?? 'GET';
-  const headers = config.header ?? config.headers ?? {};
+  const url = request.url;
+  const method = request.method ?? 'GET';
+  const headers = request.header ?? request.headers ?? {};
 
   if (isNullOrWhitespace(url)) {
     throw new Error('sendRequest requires a "url" property');
@@ -26,23 +26,23 @@ async function executeHttpRequest(config: RequestConfig, signal: AbortSignal): P
   };
 
   // Handle body
-  if (config.body !== null && config.body !== undefined) {
-    if (typeof config.body === 'object' && 'mode' in config.body && config.body.mode !== null && config.body.mode !== undefined) {
+  if (request.body !== null && request.body !== undefined) {
+    if (typeof request.body === 'object' && 'mode' in request.body && request.body.mode !== null && request.body.mode !== undefined) {
       // Handle different body modes
-      if (config.body.mode === 'raw') {
-        fetchOptions.body = config.body.raw;
-      } else if (config.body.mode === 'urlencoded' && config.body.kv !== null && config.body.kv !== undefined) {
+      if (request.body.mode === 'raw') {
+        fetchOptions.body = request.body.raw;
+      } else if (request.body.mode === 'urlencoded' && request.body.kv !== null && request.body.kv !== undefined) {
         // Convert to URLSearchParams
         const params = new URLSearchParams();
-        for (const item of config.body.kv) {
+        for (const item of request.body.kv) {
           params.append(item.key, item.value);
         }
         fetchOptions.body = params.toString();
         (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/x-www-form-urlencoded';
-      } else if (config.body.mode === 'formdata' && config.body.kv !== null && config.body.kv !== undefined) {
+      } else if (request.body.mode === 'formdata' && request.body.kv !== null && request.body.kv !== undefined) {
         // FormData
         const formData = new FormData();
-        for (const item of config.body.kv) {
+        for (const item of request.body.kv) {
           if (item.type === 'binary') {
             const buffer = Buffer.from(item.value, 'base64');
             formData.append(item.key, buffer, item.key);
@@ -52,11 +52,11 @@ async function executeHttpRequest(config: RequestConfig, signal: AbortSignal): P
         }
         fetchOptions.body = formData;
       }
-    } else if (typeof config.body === 'string') {
-      fetchOptions.body = config.body;
+    } else if (typeof request.body === 'string') {
+      fetchOptions.body = request.body;
     } else {
       // Assume JSON
-      fetchOptions.body = JSON.stringify(config.body);
+      fetchOptions.body = JSON.stringify(request.body);
       const headersRecord = fetchOptions.headers as Record<string, string>;
       headersRecord['Content-Type'] ??= 'application/json';
     }
@@ -89,7 +89,7 @@ async function executeHttpRequest(config: RequestConfig, signal: AbortSignal): P
     });
 
     // Return response object compatible with quest API
-    const responseObj: ResponseObject = {
+    const responseObj: SendRequestResponse = {
       status: response.status,
       statusText: response.statusText,
       body: body,
@@ -142,8 +142,8 @@ export function createQuestAPI(
     fail: testAPI.fail,
 
     // Send HTTP request - supports BOTH async/await and callback patterns
-    sendRequest(config: RequestConfig, callback?: (err: Error | null, res: ResponseObject | null) => void) {
-      const requestPromise = executeHttpRequest(config, context.abortSignal);
+    sendRequest(request: SendRequest, callback?: (err: Error | null, res: SendRequestResponse | null) => void) {
+      const requestPromise = executeHttpRequest(request, context.abortSignal);
 
       // If callback provided, use callback pattern
       if (callback !== null && callback !== undefined && typeof callback === 'function') {

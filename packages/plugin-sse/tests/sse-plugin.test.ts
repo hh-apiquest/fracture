@@ -53,6 +53,22 @@ function createMockContext(abortSignal?: AbortSignal): ExecutionContext {
   };
 }
 
+type SseMessage = {
+  data: string;
+  event?: string;
+  id?: string;
+};
+
+type SseResponseBody = {
+  count: number;
+  messages: SseMessage[];
+};
+
+const parseResponseBody = <T,>(body: unknown): T => {
+  const rawBody = typeof body === 'string' ? body : JSON.stringify(body ?? '');
+  return JSON.parse(rawBody) as T;
+};
+
 // SSE test server
 class TestSSEServer {
   private server: http.Server | null = null;
@@ -374,17 +390,11 @@ describe('SSE Plugin', () => {
       expect(response.status).toBe(200);
       expect(response.statusText).toBe('Stream Complete');
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const body = JSON.parse(response.body);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const body = parseResponseBody<SseResponseBody>(response.body);
       expect(body.count).toBe(3);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages).toHaveLength(3);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[0].data).toBe('Message 1');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[1].data).toBe('Message 2');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[2].data).toBe('Message 3');
     }, 10000);
 
@@ -403,13 +413,9 @@ describe('SSE Plugin', () => {
 
       expect(response.status).toBe(200);
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const body = JSON.parse(response.body);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const body = parseResponseBody<SseResponseBody>(response.body);
       expect(body.count).toBe(2);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[0].event).toBe('custom');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[0].data).toBe('Event message 1');
     }, 10000);
 
@@ -428,13 +434,9 @@ describe('SSE Plugin', () => {
 
       expect(response.status).toBe(200);
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const body = JSON.parse(response.body);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const body = parseResponseBody<SseResponseBody>(response.body);
       expect(body.count).toBe(2);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[0].id).toBe('1');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[1].id).toBe('2');
     }, 10000);
 
@@ -453,11 +455,8 @@ describe('SSE Plugin', () => {
 
       expect(response.status).toBe(200);
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const body = JSON.parse(response.body);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const body = parseResponseBody<SseResponseBody>(response.body);
       expect(body.count).toBe(0);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages).toHaveLength(0);
     }, 10000);
 
@@ -478,11 +477,8 @@ describe('SSE Plugin', () => {
       expect(response.status).toBe(200);
       expect(response.statusText).toBe('Stream Complete (Timeout)');
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const body = JSON.parse(response.body);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const body = parseResponseBody<SseResponseBody>(response.body);
       expect(body.count).toBe(1);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       expect(body.messages[0].data).toBe('Initial message');
     }, 10000);
 

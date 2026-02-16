@@ -9,6 +9,21 @@ import type { ExecutionContext, ScriptType } from '@apiquest/types';
 import { mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 import { CookieJar } from '../src/CookieJar.js';
 
+type ResponseWithHeaders = {
+  headers?: Record<string, string | string[]>;
+};
+
+const getSetCookieHeaders = (
+  response: ExecutionContext['currentResponse']
+): string | string[] | null | undefined => {
+  if (response === undefined || response === null || typeof response !== 'object') {
+    return undefined;
+  }
+
+  const headers = (response as ResponseWithHeaders).headers;
+  return headers?.['set-cookie'];
+};
+
 describe('Section 12: quest.cookies', () => {
   let engine: ScriptEngine;
   let context: ExecutionContext;
@@ -52,7 +67,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Cookie retrieved', () => {
@@ -74,7 +89,7 @@ describe('Section 12: quest.cookies', () => {
         headers: {},
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('No cookie returns null', () => {
@@ -102,7 +117,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Multiple cookies retrieved', () => {
@@ -127,7 +142,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Cookie value extracted correctly', () => {
@@ -157,7 +172,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Cookie exists', () => {
@@ -178,7 +193,7 @@ describe('Section 12: quest.cookies', () => {
         headers: {},
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Cookie does not exist', () => {
@@ -204,7 +219,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Multiple cookie check', () => {
@@ -239,7 +254,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const cookies = quest.cookies.toObject();
@@ -268,7 +283,7 @@ describe('Section 12: quest.cookies', () => {
         headers: {},
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const cookies = quest.cookies.toObject();
@@ -297,7 +312,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const cookies = quest.cookies.toObject();
@@ -332,7 +347,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         // Verify cookie exists
@@ -370,7 +385,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.cookies.clear();
@@ -394,7 +409,7 @@ describe('Section 12: quest.cookies', () => {
         headers: {},
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.cookies.clear();
@@ -425,7 +440,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const sessionId = quest.cookies.get('sessionId');
@@ -451,7 +466,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const cookieHeader = quest.response.headers.get('set-cookie');
@@ -482,7 +497,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         quest.test('Login sets required cookies', () => {
@@ -512,7 +527,7 @@ describe('Section 12: quest.cookies', () => {
         },
         duration: 100
       };
-      context.cookieJar.store(context.currentResponse.headers['set-cookie'], 'http://localhost/');
+      context.cookieJar.store(getSetCookieHeaders(context.currentResponse), 'http://localhost/');
       
       const script = `
         const cookies = quest.cookies.toObject();

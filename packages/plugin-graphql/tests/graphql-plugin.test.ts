@@ -52,6 +52,11 @@ function createMockContext(): ExecutionContext {
   };
 }
 
+const parseResponseBody = <T,>(body: unknown): T => {
+  const rawBody = typeof body === 'string' ? body : JSON.stringify(body ?? '');
+  return JSON.parse(rawBody) as T;
+};
+
 // Simple mock GraphQL server for testing
 class TestGraphQLServer {
   private server: http.Server | null = null;
@@ -404,7 +409,7 @@ describe('GraphQL Plugin', () => {
       const response = await graphqlPlugin.execute(request, context, {});
 
       expect(response.status).toBe(200);
-      const responseData = JSON.parse(response.body) as { data: { user: { id: string; name: string; email: string } } };
+      const responseData = parseResponseBody<{ data: { user: { id: string; name: string; email: string } } }>(response.body);
       expect(responseData.data.user.id).toBe('123');
       expect(responseData.data.user.name).toBe('Test User');
     });
@@ -428,7 +433,7 @@ describe('GraphQL Plugin', () => {
       const response = await graphqlPlugin.execute(request, context, {});
 
       expect(response.status).toBe(200);
-      const responseData = JSON.parse(response.body) as { data: { createUser: { id: string; name: string; email: string } } };
+      const responseData = parseResponseBody<{ data: { createUser: { id: string; name: string; email: string } } }>(response.body);
       expect(responseData.data.createUser.name).toBe('New User');
       expect(responseData.data.createUser.email).toBe('new@example.com');
     });
