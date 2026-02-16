@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { mockProtocolPlugin } from './test-helpers.js';
+import { mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 import { CookieJar } from '../src/CookieJar.js';
 
 describe('Section 12: quest.cookies', () => {
@@ -20,7 +20,7 @@ describe('Section 12: quest.cookies', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: undefined,
@@ -32,7 +32,8 @@ describe('Section 12: quest.cookies', () => {
       executionHistory: [],
       options: {},
       cookieJar: new CookieJar({ persist: false }),
-      protocolPlugin: mockProtocolPlugin
+      protocolPlugin: mockProtocolPlugin,
+      abortSignal: new AbortController().signal
     };
   });
 

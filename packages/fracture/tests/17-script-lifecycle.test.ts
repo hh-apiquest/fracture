@@ -9,8 +9,8 @@
 
 import { describe, test, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
-import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { mockProtocolPlugin, createTestServer, type MockHttpServer, FakeJar } from './test-helpers.js';
+import type { ExecutionContext, ScriptType, ScopeContext } from '@apiquest/types';
+import { mockProtocolPlugin, createTestServer, type MockHttpServer, FakeJar, buildScopeChain } from './test-helpers.js';
 
 describe('Section 17: Script execution lifecycle', () => {
   let engine: ScriptEngine;
@@ -34,7 +34,7 @@ describe('Section 17: Script execution lifecycle', () => {
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
       protocol: 'http',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: undefined,
@@ -112,7 +112,10 @@ describe('Section 17: Script execution lifecycle', () => {
           name: 'Request 1',
           path: '/Request 1',
           iteration: 1,
-          response: { status: 200, statusText: 'OK', body: '{}', headers: {}, duration: 100 },
+          response: {
+            data: { status: 200, statusText: 'OK', body: '{}', headers: {} },
+            summary: { outcome: 'success', code: 200, label: 'OK', duration: 100 }
+          },
           tests: [],
           timestamp: new Date().toISOString()
         }
@@ -237,8 +240,9 @@ describe('Section 17: Script execution lifecycle', () => {
       
       const result = await engine.execute(script, context, 'request-pre' as ScriptType, () => { });
       expect(result.success).toBe(true);
-      expect(context.currentRequest?.data.headers?.['Authorization']).toBe('Bearer token123');
-      expect(context.currentRequest?.data.headers?.['X-Custom']).toBe('custom-value');
+      const requestHeaders = context.currentRequest?.data.headers as Record<string, string> | undefined;
+      expect(requestHeaders?.['Authorization']).toBe('Bearer token123');
+      expect(requestHeaders?.['X-Custom']).toBe('custom-value');
     });
 
     test('pre-request script can modify request body', async () => {
@@ -250,7 +254,8 @@ describe('Section 17: Script execution lifecycle', () => {
       
       const result = await engine.execute(script, context, 'request-pre' as ScriptType, () => { });
       expect(result.success).toBe(true);
-      expect(context.currentRequest?.data.body?.raw).toBe('{"updated":true}');
+      const requestBody = context.currentRequest?.data.body as { raw?: string } | undefined;
+      expect(requestBody?.raw).toBe('{"updated":true}');
     });
 
     test('pre-request script can use variables in setup', async () => {
@@ -263,7 +268,8 @@ describe('Section 17: Script execution lifecycle', () => {
       
       const result = await engine.execute(script, context, 'request-pre' as ScriptType, () => { });
       expect(result.success).toBe(true);
-      expect(context.currentRequest?.data.headers?.['Authorization']).toBe('Bearer global-token-xyz');
+      const authHeaders = context.currentRequest?.data.headers as Record<string, string> | undefined;
+      expect(authHeaders?.['Authorization']).toBe('Bearer global-token-xyz');
     });
 
     test('pre-request script cannot access response (not yet executed)', async () => {
@@ -296,11 +302,13 @@ describe('Section 17: Script execution lifecycle', () => {
       };
       
       context.currentResponse = {
-        status: 200,
-        statusText: 'OK',
-        body: '{"id":123,"name":"John Doe"}',
-        headers: { 'content-type': 'application/json' },
-        duration: 145
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: '{"id":123,"name":"John Doe"}',
+          headers: { 'content-type': 'application/json' }
+        },
+        summary: { outcome: 'success', code: 200, label: 'OK', duration: 145 }
       };
     });
 
@@ -339,7 +347,10 @@ describe('Section 17: Script execution lifecycle', () => {
     });
 
     test('post-request script can set variables from response', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       const script = `
         const data = quest.response.json();
@@ -356,7 +367,7 @@ describe('Section 17: Script execution lifecycle', () => {
       expect(result.success).toBe(true);
       expect(result.tests[0]?.passed).toBe(true);
       expect(context.globalVariables['userId']).toBe('123');
-      expect(context.scopeStack[0].vars['userName']).toBe('John Doe');
+      expect(context.scope.vars['userName']).toBe('John Doe');
     });
 
     test('post-request script can use assertion helpers', async () => {
@@ -501,7 +512,10 @@ describe('Section 17: Script execution lifecycle', () => {
     });
 
     test('Scope variables isolated per request execution', async () => {
-      context.scopeStack = [{ level: 'request', id: 'req1', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'req1', vars: {} }
+      ]);
       
       // First script execution
       const script1 = `
@@ -510,7 +524,10 @@ describe('Section 17: Script execution lifecycle', () => {
       await engine.execute(script1, context, 'request-post' as ScriptType, () => { });
       
       // Clear scope variables (simulating new request)
-      context.scopeStack = [{ level: 'request', id: 'req2', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'req2', vars: {} }
+      ]);
       
       // Second script execution - scope should be empty
       const script2 = `
@@ -527,7 +544,10 @@ describe('Section 17: Script execution lifecycle', () => {
     test('Variables cascade correctly in quest.variables', async () => {
       context.iterationData = [{ userId: '999' }];
       context.iterationCurrent = 1;
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { priority: 'scope' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { priority: 'scope' } }
+      ]);
       context.collectionVariables = { priority: 'collection', baseUrl: 'https://api.com' };
       context.globalVariables = { priority: 'global', apiKey: 'key123' };
       

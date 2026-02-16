@@ -382,7 +382,7 @@ describe('GraphQL Plugin', () => {
       const response = await graphqlPlugin.execute(request, context, {});
 
       expect(response.status).toBe(200);
-      const responseData = JSON.parse(response.body) as { data: { hello: string } };
+      const responseData = JSON.parse(response.body as string) as { data: { hello: string } };
       expect(responseData.data.hello).toBe('Hello, World!');
     });
 

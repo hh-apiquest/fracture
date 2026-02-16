@@ -78,12 +78,17 @@ export class ConsoleReporter implements IReporter {
   }
 
   onAfterRequest(payload: EventPayloads['afterRequest']): void {
-    if (payload.response.error !== null && payload.response.error !== undefined && payload.response.error.length > 0) {
-      console.log(`  ${this.colorize('[FAIL]', '\x1b[31m')} ERROR: ${payload.response.error}`);
-    } else {
-      const statusColor = payload.response.status >= 400 ? '\x1b[31m' : '\x1b[32m';
-      console.log(`  ${this.colorize('<', statusColor)} ${payload.response.status} ${payload.response.statusText} (${payload.duration}ms)`);
+    const summary = payload.response.summary;
+    if (summary.outcome === 'error') {
+      const message = summary.message ?? 'Unknown error';
+      console.log(`  ${this.colorize('[FAIL]', '\x1b[31m')} ERROR: ${message}`);
+      return;
     }
+
+    const code = summary.code ?? 'n/a';
+    const label = summary.label ?? '';
+    const duration = summary.duration ?? payload.duration;
+    console.log(`  ${this.colorize('<', '\x1b[32m')} ${code} ${label} (${duration}ms)`);
   }
 
   onAssertion(payload: EventPayloads['assertion']): void {

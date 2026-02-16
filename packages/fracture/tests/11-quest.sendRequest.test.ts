@@ -7,7 +7,7 @@
 import { describe, test, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { mockOptionsPlugin, createTestServer, MockHttpServer, FakeJar } from './test-helpers.js';
+import { mockOptionsPlugin, createTestServer, MockHttpServer, FakeJar, buildScopeChain } from './test-helpers.js';
 
 describe('Section 11: quest.sendRequest', () => {
   let engine: ScriptEngine;
@@ -32,7 +32,7 @@ describe('Section 11: quest.sendRequest', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: undefined,

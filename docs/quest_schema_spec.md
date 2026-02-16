@@ -489,8 +489,8 @@ Scripts execute at different lifecycle stages:
   
   "postRequestScript": "
     // Runs after THIS request (includes tests)
-    quest.test('Response time under 200ms', () => {
-      expect(quest.response.time).to.be.below(200);
+    quest.test('Response duration under 200ms', () => {
+      expect(quest.response.duration).to.be.below(200);
     });
     
     quest.test('Status is 200', () => {

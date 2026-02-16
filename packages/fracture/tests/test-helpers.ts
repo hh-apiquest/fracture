@@ -1,4 +1,6 @@
-import type { CookieSetOptions, ICookieJar, IProtocolPlugin, IAuthPlugin, Auth, Request, RuntimeOptions, ValidationResult, ValidationError, PluginEventDefinition } from '@apiquest/types';
+import type { CookieSetOptions, ICookieJar, IProtocolPlugin, IAuthPlugin, Auth, Request, RuntimeOptions, ValidationResult, ValidationError, PluginEventDefinition, ScopeContext, ProtocolResponse } from '@apiquest/types';
+import http from 'http';
+import { Buffer } from 'buffer';
 
 class FakeJarClass implements ICookieJar {
   get(name: string, domain?: string, path?: string): string | null {
@@ -25,6 +27,218 @@ class FakeJarClass implements ICookieJar {
 
 export const FakeJar = new FakeJarClass();
 
+const buildSummary = (
+  outcome: 'success' | 'error',
+  code: number | string,
+  label: string,
+  duration: number,
+  message?: string
+): ProtocolResponse['summary'] => ({
+  outcome,
+  code,
+  label,
+  message,
+  duration
+});
+
+const buildMockProvider = (context: { currentRequest?: Request; currentResponse?: ProtocolResponse | { status?: number; statusText?: string; headers?: Record<string, string | string[]>; body?: string; duration?: number } }): Record<string, unknown> => {
+  const responseSource = context.currentResponse;
+  const responseData = (() => {
+    if (responseSource === null || responseSource === undefined) return null;
+    if (typeof (responseSource as ProtocolResponse).data === 'object' && (responseSource as ProtocolResponse).data !== null) {
+      return (responseSource as ProtocolResponse).data as {
+        status?: number;
+        statusText?: string;
+        headers?: Record<string, string | string[]>;
+        body?: string;
+      };
+    }
+    return responseSource as {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string | string[]>;
+      body?: string;
+    };
+  })();
+
+  const responseduration = (() => {
+    if (responseSource === null || responseSource === undefined) return 0;
+    const summaryDuration = (responseSource as ProtocolResponse).summary?.duration;
+    if (typeof summaryDuration === 'number') return summaryDuration;
+    const legacyDuration = (responseSource as { duration?: number }).duration;
+    return typeof legacyDuration === 'number' ? legacyDuration : 0;
+  })();
+
+  return {
+    request: {
+      url: (context.currentRequest?.data.url ?? '') as string,
+      method: (context.currentRequest?.data.method ?? '') as string,
+      body: {
+        get() {
+          if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
+          const body = context.currentRequest.data.body as string | Record<string, unknown>;
+
+          if (typeof body === 'string') return body;
+          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'raw') return (body as { raw?: string }).raw ?? null;
+          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'urlencoded') return null;
+          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'formdata') return null;
+
+          return null;
+        },
+        set(content: string) {
+          if (context.currentRequest === null || context.currentRequest === undefined) return;
+          if (context.currentRequest.data.body === null || context.currentRequest.data.body === undefined) {
+            context.currentRequest.data.body = { mode: 'raw', raw: content };
+          } else if (typeof context.currentRequest.data.body === 'string') {
+            context.currentRequest.data.body = content;
+          } else if (typeof context.currentRequest.data.body === 'object') {
+            (context.currentRequest.data.body as { raw?: string }).raw = content;
+          }
+        },
+        get mode() {
+          if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
+          const body = context.currentRequest.data.body as string | Record<string, unknown>;
+
+          if (typeof body === 'string') return 'raw';
+          return (typeof body === 'object' && 'mode' in body ? (body as { mode?: string }).mode : 'raw') as string;
+        }
+      },
+      headers: {
+        add(header: { key: string; value: string }) {
+          if (context.currentRequest === null || context.currentRequest === undefined) return;
+          const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
+          if (headers === null || headers === undefined) {
+            context.currentRequest.data.headers = {};
+          }
+          (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
+        },
+        remove(key: string) {
+          if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return;
+          delete (context.currentRequest.data.headers as Record<string, string>)[key];
+        },
+        get(key: string) {
+          if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return null;
+          const lowerKey = key.toLowerCase();
+          for (const [headerKey, value] of Object.entries(context.currentRequest.data.headers as Record<string, string>)) {
+            if (headerKey.toLowerCase() === lowerKey) {
+              return value;
+            }
+          }
+          return null;
+        },
+        upsert(header: { key: string; value: string }) {
+          if (context.currentRequest === null || context.currentRequest === undefined) return;
+          const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
+          if (headers === null || headers === undefined) {
+            context.currentRequest.data.headers = {};
+          }
+          (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
+        },
+        toObject() {
+          return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+        }
+      }
+    },
+    response: responseData === null ? null : {
+      status: responseData.status ?? 0,
+      statusText: responseData.statusText ?? '',
+      headers: {
+        get(name: string) {
+          if (responseData.headers === null || responseData.headers === undefined) return null;
+          const lowerName = name.toLowerCase();
+          for (const [key, value] of Object.entries(responseData.headers)) {
+            if (key.toLowerCase() === lowerName) {
+              return value;
+            }
+          }
+          return null;
+        },
+        has(name: string) {
+          if (responseData.headers === null || responseData.headers === undefined) return false;
+          const lowerName = name.toLowerCase();
+          for (const key of Object.keys(responseData.headers)) {
+            if (key.toLowerCase() === lowerName) {
+              return true;
+            }
+          }
+          return false;
+        },
+        toObject() {
+          return responseData.headers ?? {};
+        }
+      },
+      body: responseData.body ?? '',
+      text() {
+        return responseData.body ?? '';
+      },
+      json() {
+        try {
+          return JSON.parse(responseData.body ?? '{}') as unknown;
+        } catch {
+          return {};
+        }
+      },
+      time: responseduration,
+      size: responseData.body?.length ?? 0,
+      to: {
+        be: {
+          ok: responseData.status === 200,
+          success: responseData.status !== undefined && responseData.status >= 200 && responseData.status < 300,
+          clientError: responseData.status !== undefined && responseData.status >= 400 && responseData.status < 500,
+          serverError: responseData.status !== undefined && responseData.status >= 500 && responseData.status < 600
+        },
+        have: {
+          status(code: number) {
+            return responseData.status === code;
+          },
+          header(name: string) {
+            if (responseData.headers === null || responseData.headers === undefined) return false;
+            const lowerName = name.toLowerCase();
+            for (const key of Object.keys(responseData.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return true;
+              }
+            }
+            return false;
+          },
+          jsonBody(field: string) {
+            try {
+              const parsed = JSON.parse(responseData.body ?? '{}') as Record<string, unknown>;
+              return field in parsed;
+            } catch {
+              return false;
+            }
+          }
+        }
+      }
+    }
+  };
+};
+
+export const buildScopeChain = (frames: Array<Omit<ScopeContext, 'parent'>>): ScopeContext => {
+  if (frames.length === 0) {
+    return {
+      level: 'collection',
+      id: 'collection',
+      vars: {}
+    };
+  }
+
+  let current: ScopeContext = {
+    ...frames[0],
+    parent: undefined
+  };
+
+  for (let i = 1; i < frames.length; i++) {
+    current = {
+      ...frames[i],
+      parent: current
+    };
+  }
+
+  return current;
+};
+
 // Mock protocol plugin for tests that don't need actual HTTP execution
 export const mockProtocolPlugin: IProtocolPlugin = {
   protocols: ['http'],
@@ -32,14 +246,19 @@ export const mockProtocolPlugin: IProtocolPlugin = {
   version: '1.0.0',
   description: 'Mock plugin for testing',
   supportedAuthTypes: ['bearer', 'basic'],
+  protocolAPIProvider(context) {
+    return buildMockProvider(context);
+  },
   dataSchema: {},
   async execute() {
     return {
-      status: 200,
-      statusText: 'OK',
-      body: '{}',
-      headers: {},
-      duration: 100
+      data: {
+        status: 200,
+        statusText: 'OK',
+        body: '{}',
+        headers: {}
+      },
+      summary: buildSummary('success', 200, 'OK', 100)
     };
   },
   validate() {
@@ -55,6 +274,9 @@ export const mockStreamingPlugin: IProtocolPlugin = {
   description: 'Mock streaming plugin for testing plugin events',
   supportedAuthTypes: [],
   dataSchema: {},
+  protocolAPIProvider(context) {
+    return buildMockProvider(context);
+  },
   events: [
     {
       name: 'onMessage',
@@ -75,7 +297,7 @@ export const mockStreamingPlugin: IProtocolPlugin = {
       required: false
     }
   ],
-  async execute(request, context, options, emitEvent) {
+  async execute(request, context, options, emitEvent, logger) {
     // Simulate streaming by emitting multiple onMessage events
     const messageCount = context.expectedMessages ?? 3;
     for (let i = 0; i < messageCount; i++) {
@@ -89,12 +311,14 @@ export const mockStreamingPlugin: IProtocolPlugin = {
     
     // Build response before emitting onComplete
     // Real-world: WebSocket onClose has final status, gRPC onEnd has trailers
-    const response = {
-      status: 200,
-      statusText: 'OK',
-      body: `Received ${messageCount} messages`,
-      headers: {},
-      duration: 100
+    const response: ProtocolResponse = {
+      data: {
+        status: 200,
+        statusText: 'OK',
+        body: `Received ${messageCount} messages`,
+        headers: {}
+      },
+      summary: buildSummary('success', 200, 'OK', 100)
     };
     
     // Set response in context so onComplete event scripts can access quest.response
@@ -126,6 +350,9 @@ export const mockOptionsPlugin: IProtocolPlugin = {
   version: '1.0.0',
   description: 'Echoes runtime options for testing',
   supportedAuthTypes: ['mock-auth', 'mock-auth1', 'mock-auth2', 'mock-auth3'],
+  protocolAPIProvider(context) {
+    return buildMockProvider(context);
+  },
   dataSchema: {
     type: 'object',
     properties: {
@@ -143,12 +370,13 @@ export const mockOptionsPlugin: IProtocolPlugin = {
     // Check abort signal before execution
     if (context.abortSignal?.aborted === true) {
       return {
-        status: 0,
-        statusText: 'Aborted',
-        body: '',
-        headers: {},
-        duration: 0,
-        error: 'Request aborted'
+        data: {
+          status: 0,
+          statusText: 'Aborted',
+          body: '',
+          headers: {}
+        },
+        summary: buildSummary('error', 'aborted', 'Aborted', 0, 'Request aborted')
       };
     }
     
@@ -157,12 +385,15 @@ export const mockOptionsPlugin: IProtocolPlugin = {
     if (statusMatch !== null) {
       const statusCode = parseInt(statusMatch[1], 10);
       const statusText = statusCode === 200 ? 'OK' : statusCode === 404 ? 'Not Found' : statusCode === 500 ? 'Internal Server Error' : 'Status';
+      const duration = Date.now() - startTime;
       return {
-        status: statusCode,
-        statusText,
-        body: JSON.stringify({ status: statusCode }),
-        headers,
-        duration: Date.now() - startTime
+        data: {
+          status: statusCode,
+          statusText,
+          body: JSON.stringify({ status: statusCode }),
+          headers
+        },
+        summary: buildSummary('success', statusCode, statusText, duration)
       };
     }
     
@@ -183,26 +414,30 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       });
       
       if (delayResult === 'aborted') {
+        const duration = Date.now() - startTime;
         return {
-          status: 0,
-          statusText: 'Aborted',
-          body: '',
-          headers: {},
-          duration: Date.now() - startTime,
-          error: 'Request aborted'
+          data: {
+            status: 0,
+            statusText: 'Aborted',
+            body: '',
+            headers: {}
+          },
+          summary: buildSummary('error', 'aborted', 'Aborted', duration, 'Request aborted')
         };
       }
     }
     
     // Simulate network errors for invalid domains (return error response, don't throw)
     if (url.includes('invalid-domain') || url.includes('does-not-exist')) {
+      const duration = Date.now() - startTime;
       return {
-        status: 0,
-        statusText: 'Network Error',
-        body: '',
-        headers: {},
-        duration: Date.now() - startTime,
-        error: `getaddrinfo ENOTFOUND ${url}`
+        data: {
+          status: 0,
+          statusText: 'Network Error',
+          body: '',
+          headers: {}
+        },
+        summary: buildSummary('error', 'network', 'Network Error', duration, `getaddrinfo ENOTFOUND ${url}`)
       };
     }
     
@@ -214,20 +449,24 @@ export const mockOptionsPlugin: IProtocolPlugin = {
     if (url.includes('/redirect/') && options.followRedirects !== false) {
       // Mock follows redirects - return final 200
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ message: 'Final destination after redirect', requestCookies }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ message: 'Final destination after redirect', requestCookies }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     } else if (url.includes('/redirect/') && options.followRedirects === false) {
       // Mock doesn't follow - return 302
       return {
-        status: 302,
-        statusText: 'Found',
-        body: '',
-        headers: { ...headers, 'location': 'mock://final' },
-        duration: 5
+        data: {
+          status: 302,
+          statusText: 'Found',
+          body: '',
+          headers: { ...headers, 'location': 'mock://final' }
+        },
+        summary: buildSummary('success', 302, 'Found', 5)
       };
     }
     
@@ -244,22 +483,26 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       setCookieHeaders.forEach(cookie => context.cookieJar.store(cookie, url));
       
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ message: 'Cookies set' }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ message: 'Cookies set' }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     }
     
     if (url.includes('/echo-cookies')) {
       // Echo back the cookies that were sent
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ cookies: cookieHeader ?? '' }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ cookies: cookieHeader ?? '' }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     }
     
@@ -269,11 +512,13 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       context.cookieJar.store(setCookieHeader, url);
       
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ message: 'Cookie with attributes set' }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ message: 'Cookie with attributes set' }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     }
     
@@ -283,11 +528,13 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       context.cookieJar.store(setCookieHeader, url);
       
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ message: 'API cookie set' }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ message: 'API cookie set' }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     }
     
@@ -295,11 +542,13 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       // Check if cookie was sent
       const hasCookie = (cookieHeader ?? '').includes('api_token');
       return {
-        status: 200,
-        statusText: 'OK',
-        body: JSON.stringify({ hasCookie }),
-        headers,
-        duration: 5
+        data: {
+          status: 200,
+          statusText: 'OK',
+          body: JSON.stringify({ hasCookie }),
+          headers
+        },
+        summary: buildSummary('success', 200, 'OK', 5)
       };
     }
     
@@ -309,11 +558,13 @@ export const mockOptionsPlugin: IProtocolPlugin = {
       context.cookieJar.store(setCookieHeader, url);
       
       return {
-        status: 401,
-        statusText: 'Unauthorized',
-        body: JSON.stringify({ error: 'Unauthorized' }),
-        headers,
-        duration: 5
+        data: {
+          status: 401,
+          statusText: 'Unauthorized',
+          body: JSON.stringify({ error: 'Unauthorized' }),
+          headers
+        },
+        summary: buildSummary('success', 401, 'Unauthorized', 5)
       };
     }
     
@@ -330,33 +581,37 @@ export const mockOptionsPlugin: IProtocolPlugin = {
         
         // Return indicating cookies were set
         return {
-          status: 200,
-          statusText: 'OK',
-          body: JSON.stringify({ message: 'Cookie set', name, value, requestCookies }),
-          headers,
-          duration: 5
+          data: {
+            status: 200,
+            statusText: 'OK',
+            body: JSON.stringify({ message: 'Cookie set', name, value, requestCookies }),
+            headers
+          },
+          summary: buildSummary('success', 200, 'OK', 5)
         };
       }
     }
     
     // Default: echo received options
     return {
-      status: 200,
-      statusText: 'OK',
-      body: JSON.stringify({
-        receivedOptions: {
-          timeout: options.timeout,
-          ssl: options.ssl,
-          proxy: options.proxy,
-          followRedirects: options.followRedirects,
-          maxRedirects: options.maxRedirects,
-          execution: options.execution,
-          jar: options.jar,
-          plugins: options.plugins
-        }
-      }),
-      headers,
-      duration: 5
+      data: {
+        status: 200,
+        statusText: 'OK',
+        body: JSON.stringify({
+          receivedOptions: {
+            timeout: options.timeout,
+            ssl: options.ssl,
+            proxy: options.proxy,
+            followRedirects: options.followRedirects,
+            maxRedirects: options.maxRedirects,
+            execution: options.execution,
+            jar: options.jar,
+            plugins: options.plugins
+          }
+        }),
+        headers
+      },
+      summary: buildSummary('success', 200, 'OK', 5)
     };
   },
   
@@ -446,7 +701,6 @@ export const apiKeyAuth = mockAuthPlugin;
 // ============================================================================
 // Mock HTTP Server for Testing
 // ============================================================================
-import http from 'http';
 
 export interface MockServerOptions {
   port?: number;
@@ -482,7 +736,7 @@ export class MockHttpServer {
    */
   async start(): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.server = http.createServer((req, res) => {
+      this.server = http.createServer((req: http.IncomingMessage, res: http.ServerResponse) => {
         // Enable CORS for tests
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -535,7 +789,7 @@ export class MockHttpServer {
     return new Promise((resolve, reject) => {
       if (this.server !== null) {
         const server = this.server;
-        server.close((err) => {
+        server.close((err: Error | undefined) => {
           if (err !== null && err !== undefined) reject(err);
           else resolve();
         });
@@ -586,7 +840,7 @@ export function createTestServer(): MockHttpServer {
   // POST /echo - Echo request body
   server.on('POST', '/echo', (req, res) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    req.on('data', (chunk: Buffer) => body += chunk.toString());
     req.on('end', () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -675,7 +929,7 @@ export function createTestServer(): MockHttpServer {
   // POST /upload - Handle file upload
   server.on('POST', '/upload', (req, res) => {
     let body = '';
-    req.on('data', chunk => body += chunk);
+    req.on('data', (chunk: Buffer) => body += chunk.toString());
     req.on('end', () => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

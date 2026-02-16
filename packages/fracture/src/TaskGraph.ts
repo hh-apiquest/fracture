@@ -6,7 +6,7 @@
  * - Edges represent ordering dependencies (structural + explicit dependsOn)
  *
  * Design:
- * - Script nodes: Serial execution through script queue (collection-pre/post, folder-pre/post, plugin events)
+ * - Script nodes: Serial execution through script queue (folder-pre/post, plugin events)
  * - Request nodes: Parallel execution via request pool
  *   - Inherited pre/post scripts execute INSIDE request through script queue
  *   - These are stored in node metadata, not as separate DAG nodes
@@ -41,6 +41,7 @@ export interface TaskNode {
   type: 'script' | 'request' | 'folder-enter' | 'folder-exit';
   path: PathType;
   parentFolderId?: PathType;
+  parentFolderItemId?: string;
   
   // Script node fields
   scriptType?: ScriptType;
@@ -105,25 +106,21 @@ export class TaskGraph {
     this.allowParallel = allowParallel;
     this.logger.debug(`Building DAG: allowParallel=${allowParallel}, collection="${collection.info.name}"`);
     
-    const collectionPreId = 'script:collection-pre';
-    const collectionPostId = 'script:collection-post';
+    const collectionStartId = 'collection-start';
+    const collectionEndId = 'collection-end';
 
-    // Add collection-level script nodes
+    // Add collection barrier nodes (no scripts executed in DAG)
     this.addNode({
-      id: collectionPreId,
-      name: 'collection-pre',
+      id: collectionStartId,
+      name: 'collection-start',
       type: 'script',
-      scriptType: 'collection-pre' as ScriptType,
-      script: collection.collectionPreScript,
       path: 'collection:/'
     });
 
     this.addNode({
-      id: collectionPostId,
-      name: 'collection-post',
+      id: collectionEndId,
+      name: 'collection-end',
       type: 'script',
-      scriptType: 'collection-post' as ScriptType,
-      script: collection.collectionPostScript,
       path: 'collection:/'
     });
 
@@ -137,7 +134,7 @@ export class TaskGraph {
     // Build child nodes
     // In sequential mode: add explicit edges to enforce declaration order
     // In parallel mode: siblings can execute concurrently (no sequential edges)
-    let previousCompletionId: string = collectionPreId;
+    let previousCompletionId: string = collectionStartId;
     
     for (const item of collection.items) {
       this.logger.trace(`Building item: ${item.type}:${item.name}, previousCompletionId=${previousCompletionId}`);
@@ -145,25 +142,27 @@ export class TaskGraph {
         item,
         'collection:/',
         previousCompletionId,  // Sequential: this item waits for previous
-        collectionPostId,
+        collectionEndId,
         collectionPreScripts,
         collectionPostScripts,
-        collectionAuth
+        collectionAuth,
+        undefined
       );
       
       this.logger.trace(`Built item: startId=${startId}, endId=${endId}`);
       
       // Update previousCompletionId for next sibling
-      // Sequential mode: endId (strict ordering)
-      // Parallel mode: collectionPreId (all siblings start after collection-pre)
-      previousCompletionId = this.allowParallel ? collectionPreId : endId;
+    // Sequential mode: endId (strict ordering)
+    // Parallel mode: collectionStartId (all siblings start after collection-start)
+      previousCompletionId = this.allowParallel ? collectionStartId : endId;
     }
     
-    // Final barrier: last item → collection-post
+    // Final barrier: last item → collection-end (sequential) and start → end for empty collections
     if (!this.allowParallel) {
-      this.logger.trace(`Adding final sequential barrier: ${previousCompletionId} → ${collectionPostId}`);
-      this.addEdge(previousCompletionId, collectionPostId, 'structural');
+      this.logger.trace(`Adding final sequential barrier: ${previousCompletionId} → ${collectionEndId}`);
+      this.addEdge(previousCompletionId, collectionEndId, 'structural');
     }
+    this.addEdge(collectionStartId, collectionEndId, 'structural');
     
     this.logger.debug(`DAG built: ${this.nodes.size} nodes, ${this.edges.length} edges`);
 
@@ -287,7 +286,8 @@ export class TaskGraph {
     parentPostId: string,
     inheritedPreScripts: string[],
     inheritedPostScripts: string[],
-    parentAuth?: Auth
+    parentAuth?: Auth,
+    parentFolderItemId?: string
   ): { startId: string; endId: string } {
     if (item.type === 'folder') {
       return this.buildFolder(
@@ -297,7 +297,8 @@ export class TaskGraph {
         parentPostId,
         inheritedPreScripts,
         inheritedPostScripts,
-        parentAuth
+        parentAuth,
+        parentFolderItemId
       );
     } else {
       return this.buildRequest(
@@ -307,7 +308,8 @@ export class TaskGraph {
         parentPostId,
         inheritedPreScripts,
         inheritedPostScripts,
-        parentAuth
+        parentAuth,
+        parentFolderItemId
       );
     }
   }
@@ -319,7 +321,8 @@ export class TaskGraph {
     parentPostId: string,
     inheritedPreScripts: string[],
     inheritedPostScripts: string[],
-    parentAuth?: Auth
+    parentAuth?: Auth,
+    parentFolderItemId?: string
   ): { startId: string; endId: string } {
     const folderPath = this.buildPath(parentPath, folder.name, 'folder');
     const folderEnterId = `folder-enter:${folderPath}`;
@@ -336,6 +339,7 @@ export class TaskGraph {
       name: `${folder.name}-enter`,
       type: 'folder-enter',
       parentFolderId: parentPath.startsWith('folder:/') ? parentPath : undefined,
+      parentFolderItemId,
       condition: folder.condition,
       path: folderPath,
       item: folder
@@ -348,6 +352,7 @@ export class TaskGraph {
       name: `${folder.name}-exit`,
       type: 'folder-exit',
       parentFolderId: parentPath.startsWith('folder:/') ? parentPath : undefined,
+      parentFolderItemId,
       path: folderPath,
       item: folder
     });
@@ -361,6 +366,7 @@ export class TaskGraph {
         scriptType: 'folder-pre' as ScriptType,
         script: folder.folderPreScript,
         parentFolderId: folderPath,
+        parentFolderItemId: folder.id,
         path: folderPath,
         item: folder
       });
@@ -375,6 +381,7 @@ export class TaskGraph {
         scriptType: 'folder-post' as ScriptType,
         script: folder.folderPostScript,
         parentFolderId: folderPath,
+        parentFolderItemId: folder.id,
         path: folderPath,
         item: folder
       });
@@ -444,7 +451,8 @@ export class TaskGraph {
         childrenParentPostId,
         folderPreScripts,
         folderPostScripts,
-        folderAuth  // Pass folder's effective auth to children
+        folderAuth,  // Pass folder's effective auth to children
+        folder.id
       );
     }
 
@@ -461,7 +469,8 @@ export class TaskGraph {
     parentPostId: string,
     inheritedPreScripts: string[],
     inheritedPostScripts: string[],
-    parentAuth?: Auth
+    parentAuth?: Auth,
+    parentFolderItemId?: string
   ): { startId: string; endId: string } {
     const requestPath = this.buildPath(parentPath, request.name, 'request');
     const requestId = `request:${requestPath}`;
@@ -493,6 +502,7 @@ export class TaskGraph {
       inheritedPostScripts: requestPostScripts,
       effectiveAuth,  // Store computed effectiveAuth for request execution
       parentFolderId: parentPath.startsWith('folder:/') ? parentPath : undefined,
+      parentFolderItemId,
       path: requestPath,
       item: request
     });

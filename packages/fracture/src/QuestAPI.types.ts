@@ -11,8 +11,7 @@ export interface RequestConfig {
 export interface RequestBody {
   mode?: 'raw' | 'urlencoded' | 'formdata';
   raw?: string;
-  urlencoded?: Array<{ key: string; value: string }>;
-  formdata?: Array<{ key: string; value: string }>;
+  kv?: Array<{ key: string; value: string; type?: 'text' | 'binary'; description?: string }>;
 }
 
 export interface ResponseObject {

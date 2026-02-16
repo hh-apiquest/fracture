@@ -301,6 +301,10 @@ export class DagScheduler {
         flags
       );
       
+      if (scriptResult.success === false) {
+        this.aborted = true;
+        return;
+      }
       // Handle test failures (trigger bail if enabled)
       // Note: callbacks.executeScript handles bail internally
     }
@@ -335,6 +339,13 @@ export class DagScheduler {
           success: true,
           tests: [],
           duration: 0,
+          summary: {
+            outcome: 'success',
+            code: 'skipped',
+            label: 'Skipped',
+            message: 'Skipped by condition',
+            duration: 0
+          },
           iteration: context.iterationCurrent,
           scriptError: 'Skipped by condition'
         };

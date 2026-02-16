@@ -4,6 +4,7 @@
     "module": "Node16",
     "lib": ["ES2022"],
     "moduleResolution": "node16",
+    "types": ["node"],
     "outDir": "./dist",
     "declaration": true,
     "declarationMap": true,

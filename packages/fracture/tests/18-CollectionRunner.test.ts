@@ -140,6 +140,210 @@ describe('Section 18: CollectionRunner Integration', () => {
       
       await expect(runner.run(collection)).rejects.toThrow('Pre-script failure');
     });
+
+    test('Collection lifecycle scripts execute exactly once (not per iteration)', async () => {
+      // Collection structure:
+      // Collection
+      //   └─ Folder1
+      //        └─ Folder2
+      //             └─ Request
+      //
+      // 2 iterations
+      //
+      // var1: Tracks lifecycle scripts (collectionPre/Post, folderPre/Post)
+      // var2: Tracks request-scoped scripts (preRequest/postRequest at all levels)
+      //
+      // ===== EXECUTION ORDER (VISUAL) =====
+      // collectionPre
+      //   folder1Pre
+      //     folder2Pre
+      //       Request:
+      //         collection preRequest
+      //         folder1 preRequest
+      //         folder2 preRequest
+      //         request preRequest
+      //         [HTTP CALL]
+      //         request postRequest
+      //         folder2 postRequest
+      //         folder1 postRequest
+      //         collection postRequest
+      //     folder2Post
+      //   folder1Post
+      // collectionPost
+      
+      const collection: Collection = {
+        info: { id: 'lifecycle-test', name: 'Lifecycle Test', version: '1.0.0' },
+        protocol: 'mock-options',
+        
+        collectionPreScript: `
+          const count = parseInt(quest.global.variables.get('var1') || '0');
+          quest.global.variables.set('var1', String(count + 1));
+        `,
+        
+        collectionPostScript: `
+          const count = parseInt(quest.global.variables.get('var1') || '0');
+          quest.global.variables.set('var1', String(count + 1));
+        `,
+        
+        preRequestScript: `
+          const count = parseInt(quest.global.variables.get('var2') || '0');
+          quest.global.variables.set('var2', String(count + 1));
+        `,
+        
+        postRequestScript: `
+          const count = parseInt(quest.global.variables.get('var2') || '0');
+          quest.global.variables.set('var2', String(count + 1));
+        `,
+        
+        testData: [{i: '1'}, {i: '2'}],
+        
+        items: [
+          {
+            type: 'folder',
+            id: 'folder1',
+            name: 'Folder 1',
+            
+            folderPreScript: `
+              const count = parseInt(quest.global.variables.get('var1') || '0');
+              quest.global.variables.set('var1', String(count + 1));
+            `,
+            
+            folderPostScript: `
+              const count = parseInt(quest.global.variables.get('var1') || '0');
+              quest.global.variables.set('var1', String(count + 1));
+            `,
+            
+            preRequestScript: `
+              const count = parseInt(quest.global.variables.get('var2') || '0');
+              quest.global.variables.set('var2', String(count + 1));
+            `,
+            
+            postRequestScript: `
+              const count = parseInt(quest.global.variables.get('var2') || '0');
+              quest.global.variables.set('var2', String(count + 1));
+            `,
+            
+            items: [
+              {
+                type: 'folder',
+                id: 'folder2',
+                name: 'Folder 2',
+                
+                folderPreScript: `
+                  const count = parseInt(quest.global.variables.get('var1') || '0');
+                  quest.global.variables.set('var1', String(count + 1));
+                `,
+                
+                folderPostScript: `
+                  const count = parseInt(quest.global.variables.get('var1') || '0');
+                  quest.global.variables.set('var1', String(count + 1));
+                `,
+                
+                preRequestScript: `
+                  const count = parseInt(quest.global.variables.get('var2') || '0');
+                  quest.global.variables.set('var2', String(count + 1));
+                `,
+                
+                postRequestScript: `
+                  const count = parseInt(quest.global.variables.get('var2') || '0');
+                  quest.global.variables.set('var2', String(count + 1));
+                `,
+                
+                items: [
+                  {
+                    type: 'request',
+                    id: 'req1',
+                    name: 'Request',
+                    data: { method: 'GET', url: 'mock://status/200' },
+                    
+                    preRequestScript: `
+                      const count = parseInt(quest.global.variables.get('var2') || '0');
+                      quest.global.variables.set('var2', String(count + 1));
+                    `,
+                    
+                    postRequestScript: `
+                      const count = parseInt(quest.global.variables.get('var2') || '0');
+                      quest.global.variables.set('var2', String(count + 1));
+                      
+                      quest.test('Iteration', () => {
+                        expect(quest.iteration.count).to.equal(2);
+                      });
+                    `
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      };
+      
+      const globalVars: Record<string, string> = {};
+      const result = await runner.run(collection, { globalVariables: globalVars });
+      
+      // ===== EXECUTION ORDER FOR ONE ITERATION =====
+      //
+      // 1. collectionPre: var1++ (1)
+      //
+      // ITERATION 1:
+      //   2. folder1Pre: var1++ (2)
+      //   3. folder2Pre: var1++ (3)
+      //   
+      //   REQUEST EXECUTION:
+      //     4. collection preRequest: var2++ (1)
+      //     5. folder1 preRequest: var2++ (2)
+      //     6. folder2 preRequest: var2++ (3)
+      //     7. request preRequest: var2++ (4)
+      //     [HTTP CALL]
+      //     8. request postRequest: var2++ (5)
+      //     9. folder2 postRequest: var2++ (6)
+      //    10. folder1 postRequest: var2++ (7)
+      //    11. collection postRequest: var2++ (8)
+      //   
+      //   12. folder2Post: var1++ (4)
+      //   13. folder1Post: var1++ (5)
+      //
+      // ITERATION 2:
+      //   14. folder1Pre: var1++ (6)
+      //   15. folder2Pre: var1++ (7)
+      //   
+      //   REQUEST EXECUTION:
+      //     16. collection preRequest: var2++ (9)
+      //     17. folder1 preRequest: var2++ (10)
+      //     18. folder2 preRequest: var2++ (11)
+      //     19. request preRequest: var2++ (12)
+      //     [HTTP CALL]
+      //     20. request postRequest: var2++ (13)
+      //     21. folder2 postRequest: var2++ (14)
+      //     22. folder1 postRequest: var2++ (15)
+      //     23. collection postRequest: var2++ (16)
+      //   
+      //   24. folder2Post: var1++ (8)
+      //   25. folder1Post: var1++ (9)
+      //
+      // 26. collectionPost: var1++ (10)
+      //
+      // ===== EXPECTED TOTALS =====
+      // var1: collectionPre(1) + folder lifecycles(4 per iteration × 2)(8) + collectionPost(1) = 10
+      // var2: 8 request scripts per iteration × 2 iterations = 16
+      //
+      // ===== ACTUAL (BUGGY) TOTALS =====
+      // var1: 14 (collectionPre runs 3 times, collectionPost runs 3 times, folder lifecycles run correctly)
+      // var2: 16 (correct)
+      //
+      // BUG: collectionPre/Post are added to DAG (executed per iteration) AND manually executed (once total)
+      //      Expected: 1 manual execution
+      //      Actual: 1 manual + 2 DAG = 3 total executions each
+      //
+      // FIX: Remove collectionPre/Post from DAG in TaskGraph.ts lines 112-128
+      
+      expect(globalVars['var1']).toBe('10');
+      expect(globalVars['var2']).toBe('16');
+      
+      expect(result.requestResults).toHaveLength(2); // 1 request × 2 iterations
+      expect(result.totalTests).toBe(2);
+      expect(result.passedTests).toBe(2);
+    });
+
   });
 
   // ========================================================================

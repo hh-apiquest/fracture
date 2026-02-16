@@ -44,8 +44,20 @@ export class CollectionValidator {
       this.logger.warn(`Protocol plugin not loaded for validation: ${collection.protocol}`);
     }
 
+    const seenIds = new Set<string>();
+
     // Helper to recursively validate all items
     const validateItem = (item: CollectionItem, path: string): void => {
+      if (seenIds.has(item.id)) {
+        errors.push({
+          message: `Duplicate item id '${item.id}' found in collection`,
+          location: path,
+          source: 'schema'
+        });
+      } else {
+        seenIds.add(item.id);
+      }
+
       if (item.type === 'folder') {
         const folder = item;
         

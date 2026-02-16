@@ -1,6 +1,11 @@
 import { describe, test, expect, beforeEach, afterEach, beforeAll} from 'vitest';
 import { httpPlugin } from '../src/index.js';
-import type { Request, ExecutionContext, RuntimeOptions, ICookieJar, CookieSetOptions } from '@apiquest/types';
+import type { Request, ExecutionContext, RuntimeOptions, ICookieJar, CookieSetOptions, ProtocolResponse } from '@apiquest/types';
+
+// Helper to extract typed response data
+function getResponseData(response: ProtocolResponse): { status: number; statusText: string; body: string; headers: Record<string, string | string[]> } {
+  return response.data as { status: number; statusText: string; body: string; headers: Record<string, string | string[]> };
+}
 import http from 'http';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -49,7 +54,11 @@ function createMockContext(): ExecutionContext {
     protocol: 'http',
     collectionVariables: {},
     globalVariables: {},
-    scopeStack: [],
+    scope: {
+      level: 'collection',
+      id: 'test-collection',
+      vars: {}
+    },
     iterationCurrent: 0,
     iterationCount: 1,
     iterationSource: 'none',
@@ -352,8 +361,8 @@ describe('HTTP Plugin', () => {
       const context = createMockContext();
       const response = await httpPlugin.execute(request, context, {});
 
-      expect(response.status).toBe(200);
-      expect(response.body).toBe(JSON.stringify({ message: 'success' }));
+      expect((response.data as { status: number }).status).toBe(200);
+      expect((response.data as { body: string }).body).toBe(JSON.stringify({ message: 'success' }));
     });
 
     test('should execute POST request with body', async () => {
@@ -371,8 +380,8 @@ describe('HTTP Plugin', () => {
       const context = createMockContext();
       const response = await httpPlugin.execute(request, context, {});
 
-      expect(response.status).toBe(200);
-      expect(response.body).toContain('test data');
+      expect(response.data.status).toBe(200);
+      expect(response.data.body).toContain('test data');
     });
 
     test('should handle custom headers', async () => {
@@ -392,8 +401,9 @@ describe('HTTP Plugin', () => {
       const context = createMockContext();
       const response = await httpPlugin.execute(request, context, {});
 
-      expect(response.status).toBe(200);
-      const headers = JSON.parse(response.body) as Record<string, unknown>;
+      expect(response.data.status).toBe(200);
+      const data = getResponseData(response);
+      const headers = JSON.parse(data.body) as Record<string, unknown>;
       expect(headers['x-custom-header']).toBe('custom-value');
     });
 
@@ -411,7 +421,7 @@ describe('HTTP Plugin', () => {
       const context = createMockContext();
       const response = await httpPlugin.execute(request, context, {});
 
-      expect(response.status).toBe(404);
+      expect(response.data.status).toBe(404);
     });
 
     test('should handle network errors', async () => {
@@ -432,9 +442,9 @@ describe('HTTP Plugin', () => {
 
       const response = await httpPlugin.execute(request, context, options);
       
-      expect(response.status).toBe(0);
-      expect(response.statusText).toBe('Network Error');
-      expect(response.error).toBeDefined();
+      expect(response.data.status).toBe(0);
+      expect(response.data.statusText).toBe('Network Error');
+      expect(response.summary.message).toBeDefined();
     });
 
     test('should handle missing URL error', async () => {
@@ -451,9 +461,10 @@ describe('HTTP Plugin', () => {
       const context = createMockContext();
       
       const response = await httpPlugin.execute(request, context, {});
-      expect(response.status).toBe(0);
-      expect(response.statusText).toBe('Error');
-      expect(response.error).toContain('URL is required');
+      expect(response.data.status).toBe(0);
+      expect(response.data.statusText).toBe('Error');
+      expect(response.summary.outcome).toBe('error');
+      expect(response.summary.message).toContain('URL is required');
     });
   });
 
@@ -489,9 +500,10 @@ describe('HTTP Plugin', () => {
       const response = await httpPlugin.execute(request, context, options);
       
       // Self-signed cert should fail validation
-      expect(response.status).toBe(0);
-      expect(response.error).toBeDefined();
-      expect(response.error?.toLowerCase()).toContain('certificate');
+      expect(response.data.status).toBe(0);
+      expect(response.summary.outcome).toBe('error');
+      expect(response.summary.message).toBeDefined();
+      expect(response.summary.message?.toLowerCase()).toContain('certificate');
     });
 
     test('Self-signed cert with validation disabled succeeds', async () => {
@@ -512,8 +524,9 @@ describe('HTTP Plugin', () => {
       
       const response = await httpPlugin.execute(request, context, options);
       
-      expect(response.status).toBe(200);
-      const body = JSON.parse(response.body) as { message: string };
+      expect(response.data.status).toBe(200);
+      const data = getResponseData(response);
+      const body = JSON.parse(data.body) as { message: string };
       expect(body.message).toBe('HTTPS OK');
     });
 
@@ -545,8 +558,9 @@ describe('HTTP Plugin', () => {
       
       const response = await httpPlugin.execute(request, context, options);
       
-      expect(response.status).toBe(200);
-      const body = JSON.parse(response.body) as { clientCertProvided: boolean };
+      expect(response.data.status).toBe(200);
+      const data = getResponseData(response);
+      const body = JSON.parse(data.body) as { clientCertProvided: boolean };
       expect(body.clientCertProvided).toBe(true);
     });
 
@@ -572,7 +586,7 @@ describe('HTTP Plugin', () => {
       const response = await httpPlugin.execute(request, context, options);
       
       // With proper CA, validation should pass
-      expect(response.status).toBe(200);
+      expect(response.data.status).toBe(200);
     });
   });
 
@@ -682,7 +696,7 @@ describe('HTTP Plugin', () => {
       
       // Should bypass proxy (direct connection) - proxy log should be empty
       expect(proxyServer.requestLog).toHaveLength(0);
-      expect(response.status).toBe(200);
+      expect(response.data.status).toBe(200);
     });
   });
 
@@ -775,7 +789,7 @@ describe('HTTP Plugin', () => {
       
       // Should bypass proxy due to NO_PROXY
       expect(proxyServer.requestLog).toHaveLength(0);
-      expect(response.status).toBe(200);
+      expect(response.data.status).toBe(200);
     });
 
     test('Explicit proxy options override env vars', async () => {

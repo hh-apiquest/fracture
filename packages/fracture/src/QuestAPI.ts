@@ -31,19 +31,24 @@ async function executeHttpRequest(config: RequestConfig, signal: AbortSignal): P
       // Handle different body modes
       if (config.body.mode === 'raw') {
         fetchOptions.body = config.body.raw;
-      } else if (config.body.mode === 'urlencoded' && config.body.urlencoded !== null && config.body.urlencoded !== undefined) {
+      } else if (config.body.mode === 'urlencoded' && config.body.kv !== null && config.body.kv !== undefined) {
         // Convert to URLSearchParams
         const params = new URLSearchParams();
-        for (const item of config.body.urlencoded) {
+        for (const item of config.body.kv) {
           params.append(item.key, item.value);
         }
         fetchOptions.body = params.toString();
         (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/x-www-form-urlencoded';
-      } else if (config.body.mode === 'formdata' && config.body.formdata !== null && config.body.formdata !== undefined) {
+      } else if (config.body.mode === 'formdata' && config.body.kv !== null && config.body.kv !== undefined) {
         // FormData
         const formData = new FormData();
-        for (const item of config.body.formdata) {
-          formData.append(item.key, item.value);
+        for (const item of config.body.kv) {
+          if (item.type === 'binary') {
+            const buffer = Buffer.from(item.value, 'base64');
+            formData.append(item.key, buffer, item.key);
+          } else {
+            formData.append(item.key, item.value);
+          }
         }
         fetchOptions.body = formData;
       }
@@ -130,7 +135,7 @@ export function createQuestAPI(
   // Create test API (test, skip, fail) with abort signal
   const testAPI = createQuestTestAPI(tests, scriptType, emitAssertion, context.abortSignal);
 
-  return {
+  const questApi: Record<string, unknown> = {
     // Test API
     test: testAPI.test,
     skip: testAPI.skip,
@@ -171,17 +176,19 @@ export function createQuestAPI(
     variables: (() => {
       const variablesAPI = {
         get(key: string) {
-          // Priority: iteration > scope stack > collection > env => global
+          // Priority: iteration > scope chain > collection > env => global
           const currentIterationData = context.iterationData?.[context.iterationCurrent - 1];
           if (currentIterationData !== null && currentIterationData !== undefined && key in currentIterationData) {
             return String(currentIterationData[key]);
           }
 
-          // Search scope stack (top to bottom)
-          for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-            if (key in context.scopeStack[i].vars) {
-              return context.scopeStack[i].vars[key];
+          // Search scope chain (current -> parent)
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            if (key in currentScope.vars) {
+              return currentScope.vars[key];
             }
+            currentScope = currentScope.parent;
           }
 
           if (key in context.collectionVariables) {
@@ -197,18 +204,18 @@ export function createQuestAPI(
         },
 
         set(key: string, value: string) {
-          // Search scope stack for existing key, or set in top scope
-          for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-            if (key in context.scopeStack[i].vars) {
-              context.scopeStack[i].vars[key] = value;
+          // Search scope chain for existing key, or set in current scope
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            if (key in currentScope.vars) {
+              currentScope.vars[key] = value;
               return;
             }
+            currentScope = currentScope.parent;
           }
 
-          // Not found: set in current (top) scope
-          if (context.scopeStack.length > 0) {
-            context.scopeStack[context.scopeStack.length - 1].vars[key] = value;
-          }
+          // Not found: set in current scope
+          context.scope.vars[key] = value;
         },
 
         replaceIn(template: string): string {
@@ -340,136 +347,68 @@ export function createQuestAPI(
     scope: {
       variables: {
         get(key: string) {
-          // Search scope stack top to bottom
-          for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-            if (key in context.scopeStack[i].vars) {
-              return context.scopeStack[i].vars[key];
+          // Search scope chain (current -> parent)
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            if (key in currentScope.vars) {
+              return currentScope.vars[key];
             }
+            currentScope = currentScope.parent;
           }
           return null;
         },
         set(key: string, value: string) {
-          // Search stack for existing key, or set in top scope
-          for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-            if (key in context.scopeStack[i].vars) {
-              context.scopeStack[i].vars[key] = value;
+          // Search scope chain for existing key, or set in current scope
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            if (key in currentScope.vars) {
+              currentScope.vars[key] = value;
               return;
             }
+            currentScope = currentScope.parent;
           }
 
-          // Not found: set in current (top) scope
-          if (context.scopeStack.length > 0) {
-            context.scopeStack[context.scopeStack.length - 1].vars[key] = value;
-          }
+          // Not found: set in current scope
+          context.scope.vars[key] = value;
         },
         has(key: string) {
           return this.get(key) !== null;
         },
         remove(key: string) {
           // Remove from the scope where it exists
-          for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-            if (key in context.scopeStack[i].vars) {
-              delete context.scopeStack[i].vars[key];
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            if (key in currentScope.vars) {
+              delete currentScope.vars[key];
               return true;
             }
+            currentScope = currentScope.parent;
           }
           return false;
         },
         clear() {
-          // Clear current (top) scope only
-          if (context.scopeStack.length > 0) {
-            context.scopeStack[context.scopeStack.length - 1].vars = {};
-          }
+          // Clear current scope only
+          context.scope.vars = {};
         },
         toObject() {
-          // Merge all scopes (bottom to top, so top overrides)
+          // Merge all scopes (parent to child, so child overrides)
           const result: Record<string, string> = {};
-          for (let i = 0; i < context.scopeStack.length; i++) {
-            Object.assign(result, context.scopeStack[i].vars);
+          const chain: typeof context.scope[] = [];
+          let currentScope: typeof context.scope | undefined = context.scope;
+          while (currentScope !== undefined) {
+            chain.unshift(currentScope);
+            currentScope = currentScope.parent;
+          }
+          for (const scope of chain) {
+            Object.assign(result, scope.vars);
           }
           return result;
         }
       }
     },
 
-    // Response API
-    response: context.currentResponse !== null && context.currentResponse !== undefined ? {
-      status: context.currentResponse.status,
-      statusText: context.currentResponse.statusText,
-      headers: {
-        // Method API
-        get(name: string) {
-          if (context.currentResponse?.headers === null || context.currentResponse?.headers === undefined) return null;
-          // Case-insensitive lookup
-          const lowerName = name.toLowerCase();
-          for (const [key, value] of Object.entries(context.currentResponse.headers)) {
-            if (key.toLowerCase() === lowerName) {
-              return value;
-            }
-          }
-          return null;
-        },
-        has(name: string) {
-          if (context.currentResponse?.headers === null || context.currentResponse?.headers === undefined) return false;
-          // Case-insensitive lookup
-          const lowerName = name.toLowerCase();
-          for (const key of Object.keys(context.currentResponse.headers)) {
-            if (key.toLowerCase() === lowerName) {
-              return true;
-            }
-          }
-          return false;
-        },
-        toObject() {
-          return context.currentResponse?.headers ?? {};
-        }
-      },
-      body: context.currentResponse.body,
-      text() {
-        return context.currentResponse?.body ?? '';
-      },
-      json() {
-        try {
-          return JSON.parse(context.currentResponse?.body ?? '{}') as unknown;
-        } catch {
-          return {};
-        }
-      },
-      time: context.currentResponse.duration,
-      size: context.currentResponse.body?.length ?? 0,
-      // Assertion helpers
-      to: {
-        be: {
-          ok: context.currentResponse.status === 200,
-          success: context.currentResponse.status >= 200 && context.currentResponse.status < 300,
-          clientError: context.currentResponse.status >= 400 && context.currentResponse.status < 500,
-          serverError: context.currentResponse.status >= 500 && context.currentResponse.status < 600
-        },
-        have: {
-          status(code: number) {
-            return context.currentResponse?.status === code;
-          },
-          header(name: string) {
-            if (context.currentResponse?.headers === null || context.currentResponse?.headers === undefined) return false;
-            const lowerName = name.toLowerCase();
-            for (const key of Object.keys(context.currentResponse.headers)) {
-              if (key.toLowerCase() === lowerName) {
-                return true;
-              }
-            }
-            return false;
-          },
-          jsonBody(field: string) {
-            try {
-              const data = JSON.parse(context.currentResponse?.body ?? '{}') as Record<string, unknown>;
-              return field in data;
-            } catch {
-              return false;
-            }
-          }
-        }
-      }
-    } : null,
+    // Response API (provided by protocol adapter)
+    response: null,
 
     // Request info and modification API
     request: {
@@ -481,75 +420,6 @@ export function createQuestAPI(
       },
       dependsOn: context.currentRequest?.dependsOn ?? null,
       condition: context.currentRequest?.condition ?? null,
-      url: (context.currentRequest?.data.url ?? '') as string,
-      method: (context.currentRequest?.data.method ?? '') as string,
-      body: {
-        get() {
-          if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
-          const body = context.currentRequest.data.body as string | Record<string, unknown>;
-
-          // Handle different body modes
-          if (typeof body === 'string') return body;
-          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'raw') return (body as { raw?: string }).raw ?? null;
-          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'urlencoded') return null; // Return null for non-raw modes
-          if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'formdata') return null;
-
-          return null;
-        },
-        set(content: string) {
-          if (context.currentRequest === null || context.currentRequest === undefined) return;
-          if (context.currentRequest.data.body === null || context.currentRequest.data.body === undefined) {
-            context.currentRequest.data.body = { mode: 'raw', raw: content };
-          } else if (typeof context.currentRequest.data.body === 'string') {
-            context.currentRequest.data.body = content;
-          } else if (typeof context.currentRequest.data.body === 'object') {
-            (context.currentRequest.data.body as { raw?: string }).raw = content;
-          }
-        },
-        get mode() {
-          if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
-          const body = context.currentRequest.data.body as string | Record<string, unknown>;
-
-          if (typeof body === 'string') return 'raw';
-          return (typeof body === 'object' && 'mode' in body ? (body as { mode?: string }).mode : 'raw') as string;
-        }
-      },
-      headers: {
-        add(header: { key: string; value: string; }) {
-          if (context.currentRequest === null || context.currentRequest === undefined) return;
-          const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
-          if (headers === null || headers === undefined) {
-            context.currentRequest.data.headers = {};
-          }
-          (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
-        },
-        remove(key: string) {
-          if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return;
-          delete (context.currentRequest.data.headers as Record<string, string>)[key];
-        },
-        get(key: string) {
-          if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return null;
-          // Case-insensitive lookup
-          const lowerKey = key.toLowerCase();
-          for (const [headerKey, value] of Object.entries(context.currentRequest.data.headers as Record<string, string>)) {
-            if (headerKey.toLowerCase() === lowerKey) {
-              return value;
-            }
-          }
-          return null;
-        },
-        upsert(header: { key: string; value: string; }) {
-          if (context.currentRequest === null || context.currentRequest === undefined) return;
-          const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
-          if (headers === null || headers === undefined) {
-            context.currentRequest.data.headers = {};
-          }
-          (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
-        },
-        toObject() {
-          return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
-        }
-      },
       timeout: {
         set(ms: number) {
           // Only allowed in preRequestScript
@@ -761,4 +631,51 @@ export function createQuestAPI(
 
     }
   };
+
+  const reservedKeys = new Set([
+    'collection',
+    'environment',
+    'iteration',
+    'global',
+    'scope',
+    'request',
+    'response',
+    'cookies',
+    'test',
+    'expect',
+    'event',
+    'sendRequest',
+    'wait',
+    'variables',
+    'history',
+    'expectMessages'
+  ]);
+
+  const provider = context.protocolPlugin.protocolAPIProvider;
+  if (provider !== null && provider !== undefined) {
+    const providerApi = provider(context);
+
+    if (typeof providerApi === 'object' && providerApi !== null) {
+      const providerRecord = providerApi;
+
+      if (typeof providerRecord.request === 'object' && providerRecord.request !== null) {
+        questApi.request = {
+          ...(questApi.request as Record<string, unknown>),
+          ...(providerRecord.request as Record<string, unknown>)
+        };
+      }
+
+      if (typeof providerRecord.response !== 'undefined') {
+        questApi.response = providerRecord.response;
+      }
+
+      for (const [key, value] of Object.entries(providerRecord)) {
+        if (key === 'request' || key === 'response') continue;
+        if (reservedKeys.has(key)) continue;
+        questApi[key] = value;
+      }
+    }
+  }
+
+  return questApi;
 }

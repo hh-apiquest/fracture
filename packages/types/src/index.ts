@@ -290,10 +290,11 @@ export interface PluginEvent {
 // Execution Context
 // ============================================================================
 
-export interface ScopeFrame {
+export interface ScopeContext {
   level: 'collection' | 'folder' | 'request';
   id: string;
   vars: Record<string, string>;
+  parent?: ScopeContext;
 }
 
 export type IterationSource = 'collection' | 'cli' | 'none';
@@ -306,7 +307,7 @@ export interface ExecutionContext {
   // Variable scopes
   collectionVariables: Record<string, string | Variable>;
   globalVariables: Record<string, string | Variable>;
-  scopeStack: ScopeFrame[];  // Hierarchical scope stack
+  scope: ScopeContext;  // Hierarchical scope chain (parent-linked)
   environment?: Environment;
   
   // Current execution state
@@ -441,6 +442,7 @@ export interface RequestResult {
   response?: ProtocolResponse;
   tests: TestResult[];
   duration: number;
+  summary: ExecutionSummary;
   scriptError?: string;
   iteration: number;
 }
@@ -513,6 +515,9 @@ export interface IProtocolPlugin {
   
   // Plugin event definitions (e.g., WebSocket: onMessage, onError, onComplete)
   events?: PluginEventDefinition[];
+
+  // Protocol API provider to extend quest API (request/response + extra keys)
+  protocolAPIProvider: (context: ExecutionContext) => Record<string, unknown>;
   
   execute(
     request: Request,
@@ -543,13 +548,17 @@ export interface PluginEventDefinition {
   required: boolean;         // Is this event required or optional?
 }
 
+export interface ExecutionSummary {
+  outcome: 'success' | 'error';
+  code?: number | string;
+  label?: string;
+  message?: string;
+  duration?: number;
+}
+
 export interface ProtocolResponse {
-  status: number;
-  statusText: string;
-  body: string;
-  headers: Record<string, string | string[]>;  // Headers can have multiple values (e.g., set-cookie)
-  duration: number;
-  error?: string;
+  data?: unknown; // Protocol-specific response payload
+  summary: ExecutionSummary;
 }
 
 export interface ValidationResult {

@@ -5,8 +5,8 @@
 
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
-import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import type { ExecutionContext, ScriptType, ScopeContext } from '@apiquest/types';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 5: quest.scope', () => {
   let engine: ScriptEngine;
@@ -19,7 +19,7 @@ describe('Section 5: quest.scope', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: {
@@ -34,7 +34,8 @@ describe('Section 5: quest.scope', () => {
       executionHistory: [],
       options: {},
       protocolPlugin: mockProtocolPlugin,
-      cookieJar: FakeJar
+      cookieJar: FakeJar,
+      abortSignal: new AbortController().signal
     };
   });
 
@@ -44,7 +45,10 @@ describe('Section 5: quest.scope', () => {
   
   describe('5.1 API surface', () => {
     test('get(key) returns value when set', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { tempToken: 'xyz123' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { tempToken: 'xyz123' } }
+      ]);
       
       const script = `
         quest.test('Get returns value', () => {
@@ -58,7 +62,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('get(key) returns null when missing', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       const script = `
         quest.test('Get returns null for missing', () => {
@@ -72,7 +79,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('set(key, value) sets variable', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       const script = `
         quest.scope.variables.set('tempData', 'value123');
@@ -87,11 +97,14 @@ describe('Section 5: quest.scope', () => {
       expect(result.tests[0]?.passed).toBe(true);
       
       // Verify it was actually set in context
-      expect(context.scopeStack[0].vars['tempData']).toBe('value123');
+      expect(context.scope.vars['tempData']).toBe('value123');
     });
 
     test('set(key, value) overwrites prior value', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key1: 'oldValue' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key1: 'oldValue' } }
+      ]);
       
       const script = `
         quest.scope.variables.set('key1', 'newValue');
@@ -107,7 +120,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('has(key) returns true/false', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { exists: 'value' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { exists: 'value' } }
+      ]);
       
       const script = `
         quest.test('Has works correctly', () => {
@@ -122,7 +138,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('remove(key) removes variable', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { toRemove: 'value', toKeep: 'value2' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { toRemove: 'value', toKeep: 'value2' } }
+      ]);
       
       const script = `
         const removed = quest.scope.variables.remove('toRemove');
@@ -140,7 +159,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('remove(key) returns false for missing key', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       const script = `
         const removed = quest.scope.variables.remove('nonExistent');
@@ -156,7 +178,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('clear() removes all variables', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key1: 'value1', key2: 'value2', key3: 'value3' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key1: 'value1', key2: 'value2', key3: 'value3' } }
+      ]);
       
       const script = `
         quest.scope.variables.clear();
@@ -173,11 +198,14 @@ describe('Section 5: quest.scope', () => {
       expect(result.tests[0]?.passed).toBe(true);
       
       // Verify context is cleared
-      expect(Object.keys(context.scopeStack[0].vars).length).toBe(0);
+      expect(Object.keys(context.scope.vars).length).toBe(0);
     });
 
     test('toObject() returns snapshot of all variables', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key1: 'value1', key2: 'value2' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key1: 'value1', key2: 'value2' } }
+      ]);
       
       const script = `
         const vars = quest.scope.variables.toObject();
@@ -202,7 +230,10 @@ describe('Section 5: quest.scope', () => {
   
   describe('5.2 Lifetime guarantees', () => {
     test('Scope variables set in preRequest are visible in postRequest', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       // Simulate preRequest setting a variable
       const preScript = `
@@ -229,7 +260,10 @@ describe('Section 5: quest.scope', () => {
       // Request A context
       const contextA: ExecutionContext = {
         ...context,
-        scopeStack: [{ level: 'request', id: 'testA', vars: {} }]
+        scope: buildScopeChain([
+          { level: 'collection', id: 'col-123', vars: {} },
+          { level: 'request', id: 'testA', vars: {} }
+        ])
       };
       
       const scriptA = `
@@ -237,12 +271,15 @@ describe('Section 5: quest.scope', () => {
       `;
       
       await engine.execute(scriptA, contextA, 'request-pre' as ScriptType, () => { });
-      expect(contextA.scopeStack[0].vars['requestSpecific']).toBe('valueA');
+      expect(contextA.scope.vars['requestSpecific']).toBe('valueA');
       
       // Request B context (separate request)
       const contextB: ExecutionContext = {
         ...context,
-        scopeStack: [{ level: 'request', id: 'testB', vars: {} }]
+        scope: buildScopeChain([
+          { level: 'collection', id: 'col-123', vars: {} },
+          { level: 'request', id: 'testB', vars: {} }
+        ])
       };
       
       const scriptB = `
@@ -262,7 +299,10 @@ describe('Section 5: quest.scope', () => {
       
       const request1Context: ExecutionContext = {
         ...context,
-        scopeStack: [{ level: 'request', id: 'req1', vars: {} }]
+        scope: buildScopeChain([
+          { level: 'collection', id: 'col-123', vars: {} },
+          { level: 'request', id: 'req1', vars: {} }
+        ])
       };
       
       await engine.execute(`
@@ -272,7 +312,10 @@ describe('Section 5: quest.scope', () => {
       // Request 2 gets fresh context (runner creates this)
       const request2Context: ExecutionContext = {
         ...context,
-        scopeStack: [{ level: 'request', id: 'req2', vars: {} }]  // Fresh scope
+        scope: buildScopeChain([
+          { level: 'collection', id: 'col-123', vars: {} },
+          { level: 'request', id: 'req2', vars: {} }
+        ])  // Fresh scope
       };
       
       const result = await engine.execute(`
@@ -286,7 +329,10 @@ describe('Section 5: quest.scope', () => {
     });
 
     test('Scope variables persisted when script fails (but execution stops)', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       // Set variable before error
       const preScript = `
@@ -301,7 +347,7 @@ describe('Section 5: quest.scope', () => {
       expect(result.error).toContain('Simulated error');
       
       // But variable should still be in context (persisted despite error)
-      expect(context.scopeStack[0].vars['setBeforeError']).toBe('value');
+      expect(context.scope.vars['setBeforeError']).toBe('value');
     });
   });
 });

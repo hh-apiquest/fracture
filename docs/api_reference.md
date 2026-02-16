@@ -67,94 +67,25 @@ quest.request.dependsOn         // ["req-auth", "req-setup"] - Request dependenc
 quest.request.condition         // "quest.variables.get('env') === 'dev'" - JS expression string
 ```
 
-### Properties (HTTP)
-```javascript
-quest.request.url               // "https://api.com/users/123" - Request URL
-quest.request.method            // "GET" - HTTP method
-```
+### Protocol-Specific Properties
 
-### Headers
-```javascript
-quest.request.headers.get('Authorization')                     // Get header value
-quest.request.headers.add({key: 'X-Custom', value: 'value'})   // Add header
-quest.request.headers.remove('X-Old')                          // Remove header
-quest.request.headers.upsert({key: 'User-Agent', value: '...'}) // Add or update header
-quest.request.headers.toObject()                               // All headers as object
-```
+Protocol plugins extend `quest.request` and QuestAPI with protocol-specific properties and methods.
 
-### Body
-```javascript
-quest.request.body.get()                        // Get body content as string
-quest.request.body.set('{"key": "value"}')      // Set body content
-quest.request.body.mode                         // 'raw' | 'urlencoded' | 'formdata'
-```
+See plugin documentation for details:
+- [HTTP Plugin](../../plugins/plugin-http/index.md) - `quest.request.url`, `quest.request.method`, `quest.request.headers`, `quest.request.body`
+- [GraphQL Plugin](../../plugins/plugin-graphql/index.md) - GraphQL-specific properties
+- [SSE Plugin](../../plugins/plugin-sse/index.md) - Server-Sent Events properties
 
 ---
 
 ## quest.response
 
-### Status
-```javascript
-quest.response.status           // 200 - HTTP status code
-quest.response.statusText       // "OK" - HTTP status text
-```
+Protocol plugins extend `quest.response` with protocol-specific properties, methods, and assertion helpers.
 
-### Body
-```javascript
-quest.response.body             // Raw response body string
-quest.response.json()           // Parse body as JSON (returns {} if invalid)
-quest.response.text()           // Alias for .body
-```
-
-### Headers
-```javascript
-quest.response.headers.get('content-type')     // Get header value (case-insensitive)
-                                                // Returns string | string[] | null
-                                                // (headers like 'set-cookie' can have multiple values)
-quest.response.headers.has('content-type')     // Check if header exists
-quest.response.headers.toObject()              // All headers as object: Record<string, string | string[]>
-```
-
-**Important:** Some HTTP headers (notably `set-cookie`) can have multiple values. When this occurs:
-- `get()` returns an array of strings: `['cookie1=value1', 'cookie2=value2']`
-- Single-value headers return a string: `'application/json'`
-- Missing headers return `null`
-
-**Example:**
-```javascript
-// Single value header
-const contentType = quest.response.headers.get('content-type');
-// → "application/json"
-
-// Multiple value header (set-cookie)
-const cookies = quest.response.headers.get('set-cookie');
-// → ["sessionId=abc123; Path=/", "userId=xyz; Path=/"]
-
-// Check if header exists
-if (quest.response.headers.has('set-cookie')) {
-  const cookies = quest.response.headers.get('set-cookie');
-  if (Array.isArray(cookies)) {
-    console.log(`Received ${cookies.length} cookies`);
-  }
-}
-```
-
-### Metrics
-```javascript
-quest.response.time             // 145 - Response time in milliseconds
-quest.response.size             // 1234 - Response body size in bytes
-```
-
-### Assertion Helpers
-```javascript
-quest.response.to.be.ok                        // true if status === 200
-quest.response.to.be.success                   // true if status 2xx
-quest.response.to.be.clientError               // true if status 4xx
-quest.response.to.be.serverError               // true if status 5xx
-quest.response.to.have.status(200)             // true if status matches
-quest.response.to.have.header('content-type')  // true if header exists
-quest.response.to.have.jsonBody('userId')      // true if JSON body has field
-```
+See plugin documentation for full API details:
+- [HTTP Plugin](../../plugins/plugin-http/index.md) - Status, headers, body, metrics, assertion helpers
+- [GraphQL Plugin](../../plugins/plugin-graphql/index.md) - GraphQL-specific response properties
+- [SSE Plugin](../../plugins/plugin-sse/index.md) - Server-Sent Events response properties
 
 ---
 

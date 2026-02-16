@@ -77,12 +77,13 @@ describe('Section 30: Event System', () => {
     ];
 
     events.forEach(eventName => {
-      runner.on(eventName, (payload: EventPayloads[typeof eventName]) => {
-        eventLog.push({ event: eventName, payload } as {
-          event: RunnerEvent;
-          payload: EventPayloads[RunnerEvent];
+      (runner as unknown as { on: (event: string, handler: (payload: EventPayloads[typeof eventName]) => void) => void })
+        .on(eventName, (payload: EventPayloads[typeof eventName]) => {
+          eventLog.push({ event: eventName, payload } as {
+            event: RunnerEvent;
+            payload: EventPayloads[RunnerEvent];
+          });
         });
-      });
     });
   });
 
@@ -509,7 +510,7 @@ describe('Section 30: Event System', () => {
       // Verify request, response, duration
       expect(afterRequest.request).toBeDefined();
       expect(afterRequest.response).toBeDefined();
-      expect(afterRequest.response.status).toBe(200);
+      expect((afterRequest.response?.data as { status?: number } | undefined)?.status).toBe(200);
       expect(afterRequest.duration).toBeDefined();
       expect(typeof afterRequest.duration).toBe('number');
     });

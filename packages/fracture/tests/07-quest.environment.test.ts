@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 7: quest.environment', () => {
   let engine: ScriptEngine;
@@ -19,7 +19,7 @@ describe('Section 7: quest.environment', () => {
       protocol: 'http',
       collectionInfo : { id: 'col-123', name: 'Test Collection' },
       iterationSource : 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: {
@@ -302,11 +302,10 @@ describe('Section 7: quest.environment', () => {
 
     test('Scope variables override environment variables', async () => {
       // Set up scope stack with a variable
-      context.scopeStack = [{
-        level: 'request',
-        id: 'test-req',
-        vars: { tempKey: 'fromScope' }
-      }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test-req', vars: { tempKey: 'fromScope' } }
+      ]);
       context.environment = {
         name: 'Test',
         variables: { tempKey: 'fromEnv' }

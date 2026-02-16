@@ -1,12 +1,12 @@
 import got, { OptionsOfTextResponseBody, Response, RequestError } from 'got';
+import FormData from 'form-data';
 import type { IProtocolPlugin, Request, ExecutionContext, ProtocolResponse, ValidationResult, ValidationError, RuntimeOptions, ILogger } from '@apiquest/types';
 import { HttpProxyAgent, HttpsProxyAgent } from 'hpagent';
 
 interface BodyObject {
   mode?: string;
   raw?: string;
-  urlencoded?: Array<{ key?: string; value?: unknown; disabled?: boolean }>;
-  formdata?: Array<{ key?: string; value?: unknown; disabled?: boolean }>;
+  kv?: Array<{ key?: string; value?: unknown; type?: string; description?: string }>;
   [key: string]: unknown;
 }
 
@@ -83,6 +83,160 @@ export const httpPlugin: IProtocolPlugin = {
   // Accept additional auth plugins beyond the listed types
   strictAuthList: false,
 
+  protocolAPIProvider(context: ExecutionContext) {
+    const data = (context.currentResponse?.data ?? {}) as {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string | string[]>;
+      body?: string;
+    };
+
+    return {
+      request: {
+        url: (context.currentRequest?.data.url ?? '') as string,
+        method: (context.currentRequest?.data.method ?? '') as string,
+        body: {
+          get() {
+            if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
+            const body = context.currentRequest.data.body as string | Record<string, unknown>;
+
+            if (typeof body === 'string') return body;
+            if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'raw') return (body as { raw?: string }).raw ?? null;
+            if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'urlencoded') return null;
+            if (typeof body === 'object' && 'mode' in body && (body as { mode?: string }).mode === 'formdata') return null;
+
+            return null;
+          },
+          set(content: string) {
+            if (context.currentRequest === null || context.currentRequest === undefined) return;
+            if (context.currentRequest.data.body === null || context.currentRequest.data.body === undefined) {
+              context.currentRequest.data.body = { mode: 'raw', raw: content };
+            } else if (typeof context.currentRequest.data.body === 'string') {
+              context.currentRequest.data.body = content;
+            } else if (typeof context.currentRequest.data.body === 'object') {
+              (context.currentRequest.data.body as { raw?: string }).raw = content;
+            }
+          },
+          get mode() {
+            if (context.currentRequest?.data.body === null || context.currentRequest?.data.body === undefined) return null;
+            const body = context.currentRequest.data.body as string | Record<string, unknown>;
+
+            if (typeof body === 'string') return 'raw';
+            return (typeof body === 'object' && 'mode' in body ? (body as { mode?: string }).mode : 'raw') as string;
+          }
+        },
+        headers: {
+          add(header: { key: string; value: string; }) {
+            if (context.currentRequest === null || context.currentRequest === undefined) return;
+            const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
+            if (headers === null || headers === undefined) {
+              context.currentRequest.data.headers = {};
+            }
+            (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
+          },
+          remove(key: string) {
+            if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return;
+            delete (context.currentRequest.data.headers as Record<string, string>)[key];
+          },
+          get(key: string) {
+            if (context.currentRequest?.data.headers === null || context.currentRequest?.data.headers === undefined) return null;
+            const lowerKey = key.toLowerCase();
+            for (const [headerKey, value] of Object.entries(context.currentRequest.data.headers as Record<string, string>)) {
+              if (headerKey.toLowerCase() === lowerKey) {
+                return value;
+              }
+            }
+            return null;
+          },
+          upsert(header: { key: string; value: string; }) {
+            if (context.currentRequest === null || context.currentRequest === undefined) return;
+            const headers = context.currentRequest.data.headers as Record<string, string> | undefined;
+            if (headers === null || headers === undefined) {
+              context.currentRequest.data.headers = {};
+            }
+            (context.currentRequest.data.headers as Record<string, string>)[header.key] = header.value;
+          },
+          toObject() {
+            return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+          }
+        }
+      },
+      response: {
+        status: data.status ?? 0,
+        statusText: data.statusText ?? '',
+        headers: {
+          get(name: string) {
+            if (data.headers === null || data.headers === undefined) return null;
+            const lowerName = name.toLowerCase();
+            for (const [key, value] of Object.entries(data.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return value;
+              }
+            }
+            return null;
+          },
+          has(name: string) {
+            if (data.headers === null || data.headers === undefined) return false;
+            const lowerName = name.toLowerCase();
+            for (const key of Object.keys(data.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return true;
+              }
+            }
+            return false;
+          },
+          toObject() {
+            return data.headers ?? {};
+          }
+        },
+        body: data.body ?? '',
+        text() {
+          return data.body ?? '';
+        },
+        json() {
+          try {
+            return JSON.parse(data.body ?? '{}') as unknown;
+          } catch {
+            return {};
+          }
+        },
+        duration: context.currentResponse?.summary?.duration ?? 0,
+        size: data.body?.length ?? 0,
+        to: {
+          be: {
+            ok: data.status === 200,
+            success: data.status !== undefined && data.status >= 200 && data.status < 300,
+            clientError: data.status !== undefined && data.status >= 400 && data.status < 500,
+            serverError: data.status !== undefined && data.status >= 500 && data.status < 600
+          },
+          have: {
+            status(code: number) {
+              return data.status === code;
+            },
+            header(name: string) {
+              if (data.headers === null || data.headers === undefined) return false;
+              const lowerName = name.toLowerCase();
+              for (const key of Object.keys(data.headers)) {
+                if (key.toLowerCase() === lowerName) {
+                  return true;
+                }
+              }
+              return false;
+            },
+            jsonBody(field: string) {
+              try {
+                const parsed = JSON.parse(data.body ?? '{}') as Record<string, unknown>;
+                return field in parsed;
+              } catch {
+                return false;
+              }
+            }
+          }
+        }
+      }
+    };
+  },
+
   // Data schema for HTTP requests
   dataSchema: {
     type: 'object',
@@ -97,6 +251,19 @@ export const httpPlugin: IProtocolPlugin = {
         type: 'string',
         description: 'Request URL'
       },
+      params: {
+        type: 'array',
+        description: 'Query parameters as key/value pairs',
+        items: {
+          type: 'object',
+          required: ['key', 'value'],
+          properties: {
+            key: { type: 'string' },
+            value: { type: 'string' },
+            description: { type: 'string' }
+          }
+        }
+      },
       headers: {
         type: 'object',
         description: 'HTTP headers',
@@ -106,7 +273,35 @@ export const httpPlugin: IProtocolPlugin = {
         description: 'Request body (string or structured object)',
         oneOf: [
           { type: 'string' },
-          { type: 'object' }
+          {
+            type: 'object',
+            required: ['mode'],
+            properties: {
+              mode: {
+                type: 'string',
+                enum: ['none', 'raw', 'binary', 'urlencoded', 'formdata']
+              },
+              raw: {
+                type: 'string',
+                description: 'Raw body content (used for raw and binary; binary expects base64)'
+              },
+              kv: {
+                type: 'array',
+                description: 'Unified key/value list for urlencoded or formdata bodies',
+                items: {
+                  type: 'object',
+                  required: ['key', 'value'],
+                  properties: {
+                    key: { type: 'string' },
+                    type: { type: 'string', enum: ['text', 'binary'] },
+                    value: { type: 'string' },
+                    description: { type: 'string' }
+                  }
+                }
+              }
+            },
+            additionalProperties: true
+          }
         ]
       }
     }
@@ -143,7 +338,7 @@ export const httpPlugin: IProtocolPlugin = {
 
   async execute(request: Request, context: ExecutionContext, options: RuntimeOptions, emitEvent?: (eventName: string, eventData: unknown) => Promise<void>, logger?: ILogger): Promise<ProtocolResponse> {
     const startTime = Date.now();
-    const url = String(request.data.url ?? '');
+    let url = String(request.data.url ?? '');
 
     try {
       // Request configuration
@@ -158,6 +353,19 @@ export const httpPlugin: IProtocolPlugin = {
       if (isNullOrWhitespace(url)) {
         logger?.error('HTTP request missing URL');
         throw new Error('URL is required for HTTP requests');
+      }
+
+      // Handle query parameters
+      const params = request.data.params as Array<{ key?: string; value?: string; }> | undefined;
+      if (params !== undefined && params !== null && Array.isArray(params) && params.length > 0) {
+        const urlObj = new URL(url);
+        params.forEach((item) => {
+          if (typeof item.key === 'string' && item.value !== undefined) {
+            urlObj.searchParams.append(item.key, String(item.value));
+          }
+        });
+        url = urlObj.toString();
+        logger?.trace('Query parameters applied', { url });
       }
 
       const httpOptions: Record<string, unknown> = (options.plugins?.http as Record<string, unknown> | null | undefined) ?? {};
@@ -213,9 +421,9 @@ export const httpPlugin: IProtocolPlugin = {
             logger?.trace('HTTP body mode set to none; skipping body');
           } else if (bodyObj.mode === 'raw' && typeof bodyObj.raw === 'string') {
             gotOptions.body = bodyObj.raw;
-          } else if (bodyObj.mode === 'urlencoded' && Array.isArray(bodyObj.urlencoded)) {
+          } else if (bodyObj.mode === 'urlencoded' && Array.isArray(bodyObj.kv)) {
             const params = new URLSearchParams();
-            bodyObj.urlencoded.forEach((item: { key?: string; value?: unknown; disabled?: boolean }) => {
+            bodyObj.kv.forEach((item: { key?: string; value?: unknown; }) => {
               if (typeof item.key === 'string' && item.value !== undefined) {
                 params.append(item.key, String(item.value));
               }
@@ -223,8 +431,25 @@ export const httpPlugin: IProtocolPlugin = {
             gotOptions.body = params.toString();
             gotOptions.headers ??= {};
             gotOptions.headers['content-type'] = 'application/x-www-form-urlencoded';
-          } else if (bodyObj.mode === 'formdata' && Array.isArray(bodyObj.formdata)) {
-            gotOptions.json = bodyObj;
+          } else if (bodyObj.mode === 'formdata' && Array.isArray(bodyObj.kv)) {
+            const formData = new FormData();
+            bodyObj.kv.forEach((item: { key?: string; value?: unknown; type?: string; }) => {
+              if (typeof item.key !== 'string' || item.value === undefined) return;
+              const itemType = item.type === 'binary' ? 'binary' : 'text';
+              if (itemType === 'binary' && typeof item.value === 'string') {
+                const buffer = Buffer.from(item.value, 'base64');
+                formData.append(item.key, buffer, { filename: item.key });
+              } else {
+                formData.append(item.key, String(item.value));
+              }
+            });
+            gotOptions.body = formData as unknown as string;
+            gotOptions.headers = {
+              ...(gotOptions.headers ?? {}),
+              ...formData.getHeaders()
+            };
+          } else if (bodyObj.mode === 'urlencoded' || bodyObj.mode === 'formdata') {
+            logger?.warn('HTTP body mode requires kv array', { mode: bodyObj.mode });
           } else {
             gotOptions.json = bodyObj;
           }
@@ -309,11 +534,18 @@ export const httpPlugin: IProtocolPlugin = {
       logger?.debug('HTTP response received', { status: response.statusCode, duration });
 
       return {
-        status: response.statusCode,
-        statusText: (response.statusMessage !== null && response.statusMessage !== undefined && response.statusMessage.length > 0) ? response.statusMessage : '',
-        headers: normalizedHeaders,
-        body: String(response.body),
-        duration,
+        data: {
+          status: response.statusCode,
+          statusText: (response.statusMessage !== null && response.statusMessage !== undefined && response.statusMessage.length > 0) ? response.statusMessage : '',
+          headers: normalizedHeaders,
+          body: String(response.body)
+        },
+        summary: {
+          outcome: 'success',
+          code: response.statusCode,
+          label: (response.statusMessage !== null && response.statusMessage !== undefined && response.statusMessage.length > 0) ? response.statusMessage : '',
+          duration
+        }
       };
     } catch (err) {
       const duration = Date.now() - startTime;
@@ -322,12 +554,19 @@ export const httpPlugin: IProtocolPlugin = {
       if (error instanceof RequestError && error.name === 'AbortError') {
         logger?.warn('HTTP request aborted', { url, duration });
         return {
-          status: 0,
-          statusText: 'Aborted',
-          body: '',
-          headers: {},
-          duration,
-          error: 'Request aborted'
+          data: {
+            status: 0,
+            statusText: 'Aborted',
+            body: '',
+            headers: {}
+          },
+          summary: {
+            outcome: 'error',
+            code: 'aborted',
+            label: 'Aborted',
+            message: 'Request aborted',
+            duration
+          }
         };
       }
 
@@ -352,33 +591,54 @@ export const httpPlugin: IProtocolPlugin = {
           logger?.debug('HTTP error response received', { status: error.response.statusCode, duration });
 
           return {
-            status: error.response.statusCode,
-            statusText: (error.response.statusMessage !== null && error.response.statusMessage !== undefined && error.response.statusMessage.length > 0) ? error.response.statusMessage : '',
-            headers: normalizedHeaders,
-            body: String(error.response.body),
-            duration,
+            data: {
+              status: error.response.statusCode,
+              statusText: (error.response.statusMessage !== null && error.response.statusMessage !== undefined && error.response.statusMessage.length > 0) ? error.response.statusMessage : '',
+              headers: normalizedHeaders,
+              body: String(error.response.body)
+            },
+            summary: {
+              outcome: 'error',
+              code: error.response.statusCode,
+              label: (error.response.statusMessage !== null && error.response.statusMessage !== undefined && error.response.statusMessage.length > 0) ? error.response.statusMessage : '',
+              duration
+            }
           };
         } else {
           logger?.warn('HTTP network error', { message: error.message, duration });
           return {
-            status: 0,
-            statusText: 'Network Error',
-            headers: {},
-            body: '',
-            duration,
-            error: !isNullOrEmpty(error.message) ? error.message : 'Network request failed'
+            data: {
+              status: 0,
+              statusText: 'Network Error',
+              headers: {},
+              body: ''
+            },
+            summary: {
+              outcome: 'error',
+              code: 'network',
+              label: 'Network Error',
+              message: !isNullOrEmpty(error.message) ? error.message : 'Network request failed',
+              duration
+            }
           };
         }
       }
 
       logger?.error('HTTP unexpected error', { error: err instanceof Error ? err.message : String(err), duration });
       return {
-        status: 0,
-        statusText: 'Error',
-        headers: {},
-        body: '',
-        duration,
-        error: err instanceof Error ? err.message : String(err)
+        data: {
+          status: 0,
+          statusText: 'Error',
+          headers: {},
+          body: ''
+        },
+        summary: {
+          outcome: 'error',
+          code: 'unexpected',
+          label: 'Error',
+          message: err instanceof Error ? err.message : String(err),
+          duration
+        }
       };
     }
   },

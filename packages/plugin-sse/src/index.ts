@@ -30,6 +30,71 @@ export const ssePlugin: IProtocolPlugin = {
   // Accept additional auth plugins beyond the listed types
   strictAuthList: false,
 
+  protocolAPIProvider(context: ExecutionContext) {
+    const responseData = (context.currentResponse?.data ?? context.currentResponse ?? {}) as {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string | string[]>;
+      body?: string;
+      messageCount?: number;
+      messages?: SSEMessage[];
+    };
+
+    return {
+      request: {
+        url: (context.currentRequest?.data.url ?? '') as string,
+        method: (context.currentRequest?.data.method ?? '') as string,
+        headers: {
+          toObject() {
+            return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+          }
+        }
+      },
+      response: {
+        status: responseData.status ?? 0,
+        statusText: responseData.statusText ?? '',
+        headers: {
+          get(name: string) {
+            if (responseData.headers === null || responseData.headers === undefined) return null;
+            const lowerName = name.toLowerCase();
+            for (const [key, value] of Object.entries(responseData.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return value;
+              }
+            }
+            return null;
+          },
+          has(name: string) {
+            if (responseData.headers === null || responseData.headers === undefined) return false;
+            const lowerName = name.toLowerCase();
+            for (const key of Object.keys(responseData.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return true;
+              }
+            }
+            return false;
+          },
+          toObject() {
+            return responseData.headers ?? {};
+          }
+        },
+        body: responseData.body ?? '',
+        text() {
+          return responseData.body ?? '';
+        },
+        json() {
+          try {
+            return JSON.parse(responseData.body ?? '{}') as unknown;
+          } catch {
+            return {};
+          }
+        },
+        messageCount: responseData.messageCount ?? 0,
+        messages: responseData.messages ?? []
+      }
+    };
+  },
+
   // Data schema for SSE requests
   dataSchema: {
     type: 'object',
@@ -114,15 +179,22 @@ export const ssePlugin: IProtocolPlugin = {
         controller.abort();
         logger?.debug('SSE connection timeout', { url, messageCount, duration: Date.now() - startTime });
         
-        resolve({
-          status: 200,
-          statusText: 'Stream Complete (Timeout)',
-          body: JSON.stringify({ messages, count: messageCount }),
-          headers: {},
-          duration: Date.now() - startTime,
-          messageCount,
-          messages
-        } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+          resolve({
+            data: {
+              status: 200,
+              statusText: 'Stream Complete (Timeout)',
+              body: JSON.stringify({ messages, count: messageCount }),
+              headers: {},
+              messageCount,
+              messages
+            },
+            summary: {
+              outcome: 'success',
+              code: 200,
+              label: 'Stream Complete (Timeout)',
+              duration: Date.now() - startTime
+            }
+          });
       }, timeout);
 
       try {
@@ -136,15 +208,22 @@ export const ssePlugin: IProtocolPlugin = {
             clearTimeout(timeoutId);
             logger?.debug('SSE request aborted', { url, messageCount, duration: Date.now() - startTime });
             resolve({
-              status: 0,
-              statusText: 'Aborted',
-              body: JSON.stringify({ messages, count: messageCount }),
-              headers: {},
-              duration: Date.now() - startTime,
-              error: 'Request aborted',
-              messageCount,
-              messages
-            } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+              data: {
+                status: 0,
+                statusText: 'Aborted',
+                body: JSON.stringify({ messages, count: messageCount }),
+                headers: {},
+                messageCount,
+                messages
+              },
+              summary: {
+                outcome: 'error',
+                code: 'aborted',
+                label: 'Aborted',
+                message: 'Request aborted',
+                duration: Date.now() - startTime
+              }
+            });
           });
         }
 
@@ -162,14 +241,21 @@ export const ssePlugin: IProtocolPlugin = {
             clearTimeout(timeoutId);
             logger?.warn('SSE connection failed', { status: response.status, statusText: response.statusText });
             resolve({
-              status: response.status,
-              statusText: response.statusText,
-              body: await response.text(),
-              headers: Object.fromEntries(response.headers.entries()),
-              duration: Date.now() - startTime,
-              messageCount: 0,
-              messages: []
-            } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+              data: {
+                status: response.status,
+                statusText: response.statusText,
+                body: await response.text(),
+                headers: Object.fromEntries(response.headers.entries()),
+                messageCount: 0,
+                messages: []
+              },
+              summary: {
+                outcome: 'error',
+                code: response.status,
+                label: response.statusText,
+                duration: Date.now() - startTime
+              }
+            });
             return;
           }
 
@@ -177,14 +263,21 @@ export const ssePlugin: IProtocolPlugin = {
             clearTimeout(timeoutId);
             logger?.error('SSE response has no body');
             resolve({
-              status: response.status,
-              statusText: 'No Body',
-              body: '',
-              headers: Object.fromEntries(response.headers.entries()),
-              duration: Date.now() - startTime,
-              messageCount: 0,
-              messages: []
-            } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+              data: {
+                status: response.status,
+                statusText: 'No Body',
+                body: '',
+                headers: Object.fromEntries(response.headers.entries()),
+                messageCount: 0,
+                messages: []
+              },
+              summary: {
+                outcome: 'error',
+                code: response.status,
+                label: 'No Body',
+                duration: Date.now() - startTime
+              }
+            });
             return;
           }
 
@@ -283,14 +376,21 @@ export const ssePlugin: IProtocolPlugin = {
                 }
                 
                 resolve({
-                  status: response.status,
-                  statusText: 'Stream Complete',
-                  body: JSON.stringify({ messages, count: messageCount }),
-                  headers: Object.fromEntries(response.headers.entries()),
-                  duration: Date.now() - startTime,
-                  messageCount,
-                  messages
-                } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+                  data: {
+                    status: response.status,
+                    statusText: 'Stream Complete',
+                    body: JSON.stringify({ messages, count: messageCount }),
+                    headers: Object.fromEntries(response.headers.entries()),
+                    messageCount,
+                    messages
+                  },
+                  summary: {
+                    outcome: 'success',
+                    code: response.status,
+                    label: 'Stream Complete',
+                    duration: Date.now() - startTime
+                  }
+                });
                 break;
               }
 
@@ -314,15 +414,22 @@ export const ssePlugin: IProtocolPlugin = {
             if (signal.aborted) {
               logger?.debug('SSE stream aborted', { messageCount, duration: Date.now() - startTime });
               resolve({
-                status: 0,
-                statusText: 'Aborted',
-                body: JSON.stringify({ messages, count: messageCount }),
-                headers: {},
-                duration: Date.now() - startTime,
-                error: 'Request aborted',
-                messageCount,
-                messages
-              } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+                data: {
+                  status: 0,
+                  statusText: 'Aborted',
+                  body: JSON.stringify({ messages, count: messageCount }),
+                  headers: {},
+                  messageCount,
+                  messages
+                },
+                summary: {
+                  outcome: 'error',
+                  code: 'aborted',
+                  label: 'Aborted',
+                  message: 'Request aborted',
+                  duration: Date.now() - startTime
+                }
+              });
             } else {
               logger?.error('SSE stream error', { error: err instanceof Error ? err.message : String(err) });
               
@@ -335,16 +442,24 @@ export const ssePlugin: IProtocolPlugin = {
                 }
               }
               
+              const message = err instanceof Error ? err.message : String(err);
               resolve({
-                status: 0,
-                statusText: 'Stream Error',
-                body: JSON.stringify({ messages, count: messageCount }),
-                headers: {},
-                duration: Date.now() - startTime,
-                error: err instanceof Error ? err.message : String(err),
-                messageCount,
-                messages
-              } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+                data: {
+                  status: 0,
+                  statusText: 'Stream Error',
+                  body: JSON.stringify({ messages, count: messageCount }),
+                  headers: {},
+                  messageCount,
+                  messages
+                },
+                summary: {
+                  outcome: 'error',
+                  code: 'stream-error',
+                  label: 'Stream Error',
+                  message,
+                  duration: Date.now() - startTime
+                }
+              });
             }
           }
         }).catch((err) => {
@@ -358,30 +473,46 @@ export const ssePlugin: IProtocolPlugin = {
             });
           }
           
+          const message = err instanceof Error ? err.message : String(err);
           resolve({
-            status: 0,
-            statusText: 'Connection Error',
-            body: '',
-            headers: {},
-            duration: Date.now() - startTime,
-            error: err instanceof Error ? err.message : String(err),
-            messageCount: 0,
-            messages: []
-          } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+            data: {
+              status: 0,
+              statusText: 'Connection Error',
+              body: '',
+              headers: {},
+              messageCount: 0,
+              messages: []
+            },
+            summary: {
+              outcome: 'error',
+              code: 'connection-error',
+              label: 'Connection Error',
+              message,
+              duration: Date.now() - startTime
+            }
+          });
         });
       } catch (err) {
         clearTimeout(timeoutId);
         logger?.error('SSE unexpected error', { error: err instanceof Error ? err.message : String(err) });
+        const message = err instanceof Error ? err.message : String(err);
         resolve({
-          status: 0,
-          statusText: 'Error',
-          body: '',
-          headers: {},
-          duration: Date.now() - startTime,
-          error: err instanceof Error ? err.message : String(err),
-          messageCount: 0,
-          messages: []
-        } as ProtocolResponse & { messageCount: number; messages: SSEMessage[] });
+          data: {
+            status: 0,
+            statusText: 'Error',
+            body: '',
+            headers: {},
+            messageCount: 0,
+            messages: []
+          },
+          summary: {
+            outcome: 'error',
+            code: 'error',
+            label: 'Error',
+            message,
+            duration: Date.now() - startTime
+          }
+        });
       }
     });
   },

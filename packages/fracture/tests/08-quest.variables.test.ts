@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 8: quest.variables (cascading)', () => {
   let engine: ScriptEngine;
@@ -19,7 +19,7 @@ describe('Section 8: quest.variables (cascading)', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: undefined,
@@ -44,7 +44,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     test('Iteration data highest priority', async () => {
       context.iterationData = [{ key: 'fromIteration' }];
       context.iterationCurrent = 1;
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'fromScope' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'fromScope' } }
+      ]);
       context.collectionVariables = { key: 'fromCollection' };
       context.environment = { name: 'Test', variables: { key: 'fromEnv' } };
       context.globalVariables = { key: 'fromGlobal' };
@@ -61,7 +64,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     });
 
     test('Local overrides collection/env/global', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'fromScope' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'fromScope' } }
+      ]);
       context.collectionVariables = { key: 'fromCollection' };
       context.environment = { name: 'Test', variables: { key: 'fromEnv' } };
       context.globalVariables = { key: 'fromGlobal' };
@@ -143,7 +149,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     test('Scopes can have same key with different values', async () => {
       context.iterationData = [{ apiUrl: 'iteration-url' }];
       context.iterationCurrent = 1;
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { apiUrl: 'scope-url' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { apiUrl: 'scope-url' } }
+      ]);
       context.collectionVariables = { apiUrl: 'collection-url' };
       context.environment = { name: 'Test', variables: { apiUrl: 'env-url' } };
       context.globalVariables = { apiUrl: 'global-url' };
@@ -168,7 +177,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     });
 
     test('Setting via quest.variables.set() goes to scope', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       context.globalVariables = { key: 'globalValue' };
       
       const script = `
@@ -211,7 +223,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     });
 
     test('replaceIn() respects precedence', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'scope' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'scope' } }
+      ]);
       context.globalVariables = { key: 'global' };
       
       const script = `
@@ -279,7 +294,10 @@ describe('Section 8: quest.variables (cascading)', () => {
     });
 
     test('has() respects precedence', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'scope' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'scope' } }
+      ]);
       context.globalVariables = { key: 'global' };
       
       const script = `

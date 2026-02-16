@@ -31,7 +31,9 @@
     ],
     "capabilities": {
       "provides": {
-        "valueTypes": ["vault:file"]
+        "valueTypes": [
+          "vault:file"
+        ]
       }
     }
   },

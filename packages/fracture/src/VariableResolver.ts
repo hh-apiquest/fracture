@@ -67,7 +67,7 @@ export class VariableResolver {
 
   /**
    * Get variable value with cascading priority
-   * Priority: iteration data > scope stack (innermost to outermost) > collection > environment > global
+   * Priority: iteration data > scope chain (innermost to outermost) > collection > environment > global
    */
   private getVariable(name: string, context: ExecutionContext): unknown {
     // 1. Iteration data (highest priority)
@@ -77,17 +77,17 @@ export class VariableResolver {
       return currentIterationData[name];
     }
 
-    // 2. Scope stack (hierarchical scope variables - search from innermost to outermost)
+    // 2. Scope chain (hierarchical scope variables - search from innermost to outermost)
     // This represents quest.scope.variables which flows through the script inheritance chain
-    if (context.scopeStack !== null && context.scopeStack !== undefined && context.scopeStack.length > 0) {
-      // Search from top of stack (most specific) to bottom (least specific)
-      for (let i = context.scopeStack.length - 1; i >= 0; i--) {
-        const frame = context.scopeStack[i];
-        if (name in frame.vars) {
-          this.logger.trace(`Variable '${name}' found in scope stack (frame ${context.scopeStack.length - 1 - i})`);
-          return frame.vars[name];
-        }
+    let currentScope: typeof context.scope | undefined = context.scope;
+    let depth = 0;
+    while (currentScope !== undefined) {
+      if (name in currentScope.vars) {
+        this.logger.trace(`Variable '${name}' found in scope chain (depth ${depth})`);
+        return currentScope.vars[name];
       }
+      currentScope = currentScope.parent;
+      depth++;
     }
 
     // 3. Collection variables

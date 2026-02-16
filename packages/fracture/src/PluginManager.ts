@@ -97,12 +97,14 @@ export class PluginManager {
     if ((context.abortSignal as AbortSignal | undefined)?.aborted === true) {
       this.logger.debug('Plugin execution aborted before start');
       return {
-        status: 0,
-        statusText: 'Aborted',
-        body: '',
-        headers: {},
-        duration: 0,
-        error: 'Request aborted'
+        data: null,
+        summary: {
+          outcome: 'error',
+          code: 'aborted',
+          label: 'Aborted',
+          message: 'Request aborted',
+          duration: 0
+        }
       };
     }
     
@@ -148,7 +150,9 @@ export class PluginManager {
     const pluginLogger = this.logger.createLogger(`Protocol:${plugin.name}`);
     const response = await plugin.execute(modifiedRequest, context, options, emitEvent, pluginLogger);
     
-    this.logger.debug(`Plugin execution completed in ${response.duration}ms (status: ${response.status})`);
+    const duration = response.summary?.duration ?? 0;
+    const code = response.summary?.code ?? 'n/a';
+    this.logger.debug(`Plugin execution completed in ${duration}ms (code: ${code})`);
     
     return response;
   }

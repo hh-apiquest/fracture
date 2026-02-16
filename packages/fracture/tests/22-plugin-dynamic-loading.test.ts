@@ -13,6 +13,11 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { isNullOrEmpty } from '../src/utils.js';
 
+const addConsoleListener = (runner: CollectionRunner, logMessages: string[]): void => {
+  (runner as unknown as { on: (event: string, handler: (payload: EventPayloads['console']) => void) => void })
+    .on('console', collectConsoleMessage(logMessages));
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -56,7 +61,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         logLevel: LogLevel.DEBUG
       });
 
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
       
       await waitForPluginResolution(runner);
       
@@ -71,7 +76,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -88,7 +93,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -139,16 +144,28 @@ describe('Section 22: Dynamic Plugin Loading', () => {
           protocols: ['test'],
           supportedAuthTypes: [],
           dataSchema: {},
+          protocolAPIProvider(context) {
+            return {
+              request: {
+                url: context.currentRequest?.data?.url ?? '',
+                method: context.currentRequest?.data?.method ?? '',
+                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
+              },
+              response: {
+                status: context.currentResponse?.data?.status ?? 0,
+                statusText: context.currentResponse?.data?.statusText ?? '',
+                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
+                body: context.currentResponse?.data?.body ?? ''
+              }
+            };
+          },
           validate(request) {
             return { valid: true };
           },
           async execute(request, context) {
             return {
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              body: 'Test plugin works',
-              duration: 0
+              data: { status: 200, statusText: 'OK', headers: {}, body: 'Test plugin works' },
+              summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 }
             };
           }
         };
@@ -159,7 +176,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -186,7 +203,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
       // Verify plugin works
       expect(result.requestResults).toHaveLength(1);
       expect(result.requestResults[0].success).toBe(true);
-      expect(result.requestResults[0].response?.body).toBe('Test plugin works');
+      expect((result.requestResults[0].response?.data as { body?: string } | undefined)?.body).toBe('Test plugin works');
     });
 
     test('Skips plugins without fracture runtime', async () => {
@@ -215,7 +232,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -268,26 +285,56 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
       // Create minimal protocol plugin for testing auth
-      const minimalProtocolPlugin = {
+      const minimalProtocolPlugin: IProtocolPlugin = {
         name: 'Minimal HTTP',
         version: '1.0.0',
         description: 'Minimal protocol for auth testing',
         protocols: ['http'],
         supportedAuthTypes: ['testauth'],
+        protocolAPIProvider(context) {
+          return {
+            request: {
+              url: (context.currentRequest?.data.url ?? '') as string,
+              method: (context.currentRequest?.data.method ?? '') as string,
+              headers: {
+                toObject() {
+                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+                }
+              }
+            },
+            response: {
+              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
+              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
+              headers: {
+                toObject() {
+                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
+                }
+              },
+              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
+            }
+          };
+        },
         dataSchema: {},
         validate() { return { valid: true }; },
         async execute() {
           return {
-            status: 200,
-            statusText: 'OK',
-            headers: {},
-            body: '',
-            duration: 0
+            data: {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              body: ''
+            },
+            summary: {
+              outcome: 'success' as const,
+              code: 200,
+              label: 'OK',
+              duration: 0
+            }
           };
         }
       };
@@ -385,11 +432,26 @@ describe('Section 22: Dynamic Plugin Loading', () => {
           protocols: ['good'],
           supportedAuthTypes: [],
           dataSchema: {},
+          protocolAPIProvider(context) {
+            return {
+              request: {
+                url: context.currentRequest?.data?.url ?? '',
+                method: context.currentRequest?.data?.method ?? '',
+                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
+              },
+              response: {
+                status: context.currentResponse?.data?.status ?? 0,
+                statusText: context.currentResponse?.data?.statusText ?? '',
+                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
+                body: context.currentResponse?.data?.body ?? ''
+              }
+            };
+          },
           validate(request) {
             return { valid: true };
           },
           async execute() {
-            return { status: 200, statusText: 'OK', headers: {}, body: '', duration: 0 };
+            return { data: { status: 200, statusText: 'OK', headers: {}, body: '' }, summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 } };
           }
         };
       `;
@@ -399,7 +461,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -501,7 +563,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -542,17 +604,47 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         description: 'Test static plugin',
         protocols: ['static-test'],
         supportedAuthTypes: [],
+        protocolAPIProvider(context) {
+          return {
+            request: {
+              url: (context.currentRequest?.data.url ?? '') as string,
+              method: (context.currentRequest?.data.method ?? '') as string,
+              headers: {
+                toObject() {
+                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+                }
+              }
+            },
+            response: {
+              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
+              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
+              headers: {
+                toObject() {
+                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
+                }
+              },
+              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
+            }
+          };
+        },
         dataSchema: {},
         validate(_request: Request, _options: RuntimeOptions) {
           return { valid: true };
         },
         async execute(request: Request, context, options, emitEvent, logger) {
           return {
-            status: 200,
-            statusText: 'OK',
-            headers: {},
-            body: 'Static plugin works',
-            duration: 0
+            data: {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              body: 'Static plugin works'
+            },
+            summary: {
+              outcome: 'success',
+              code: 200,
+              label: 'OK',
+              duration: 0
+            }
           };
         }
       };
@@ -578,7 +670,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
       
       expect(result.requestResults).toHaveLength(1);
       expect(result.requestResults[0].success).toBe(true);
-      expect(result.requestResults[0].response?.body).toBe('Static plugin works');
+      expect(result.requestResults[0].response?.data !== undefined && result.requestResults[0].response?.data !== null && (result.requestResults[0].response?.data as { body?: string }).body).toBe('Static plugin works');
     });
 
     test('Combines static and dynamic plugins', async () => {
@@ -591,17 +683,47 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         description: 'Static plugin',
         protocols: ['static'],
         supportedAuthTypes: [],
+        protocolAPIProvider(context) {
+          return {
+            request: {
+              url: (context.currentRequest?.data.url ?? '') as string,
+              method: (context.currentRequest?.data.method ?? '') as string,
+              headers: {
+                toObject() {
+                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+                }
+              }
+            },
+            response: {
+              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
+              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
+              headers: {
+                toObject() {
+                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
+                }
+              },
+              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
+            }
+          };
+        },
         dataSchema: {},
         validate(_request: Request, _options: RuntimeOptions) {
           return { valid: true };
         },
         async execute(request: Request, context, options, emitEvent, logger) {
           return {
-            status: 200,
-            statusText: 'OK',
-            headers: {},
-            body: 'Static',
-            duration: 0
+            data: {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              body: 'Static'
+            },
+            summary: {
+              outcome: 'success',
+              code: 200,
+              label: 'OK',
+              duration: 0
+            }
           };
         }
       };
@@ -637,11 +759,29 @@ describe('Section 22: Dynamic Plugin Loading', () => {
           protocols: ['dynamic'],
           supportedAuthTypes: [],
           dataSchema: {},
+          protocolAPIProvider(context) {
+            return {
+              request: {
+                url: context.currentRequest?.data?.url ?? '',
+                method: context.currentRequest?.data?.method ?? '',
+                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
+              },
+              response: {
+                status: context.currentResponse?.data?.status ?? 0,
+                statusText: context.currentResponse?.data?.statusText ?? '',
+                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
+                body: context.currentResponse?.data?.body ?? ''
+              }
+            };
+          },
           validate(request) {
             return { valid: true };
           },
           async execute() {
-            return { status: 200, statusText: 'OK', headers: {}, body: 'Dynamic', duration: 0 };
+            return {
+              data: { status: 200, statusText: 'OK', headers: {}, body: 'Dynamic' },
+              summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 }
+            };
           }
         };
       `;
@@ -666,7 +806,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
       };
       
       const staticResult = await runner.run(staticCollection);
-      expect(staticResult.requestResults[0].response?.body).toBe('Static');
+      expect(staticResult.requestResults[0].response?.data !== undefined && staticResult.requestResults[0].response?.data !== null && (staticResult.requestResults[0].response?.data as { body?: string }).body).toBe('Static');
       
       // Test dynamic plugin
       const dynamicCollection: Collection = {
@@ -681,7 +821,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
       };
       
       const dynamicResult = await runner.run(dynamicCollection);
-      expect(dynamicResult.requestResults[0].response?.body).toBe('Dynamic');
+      expect(dynamicResult.requestResults[0].response?.data !== undefined && dynamicResult.requestResults[0].response?.data !== null && (dynamicResult.requestResults[0].response?.data as { body?: string }).body).toBe('Dynamic');
       
       consoleSpy.mockRestore();
     });
@@ -722,7 +862,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -784,7 +924,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -832,7 +972,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -877,7 +1017,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       
@@ -917,7 +1057,7 @@ describe('Section 22: Dynamic Plugin Loading', () => {
         pluginsDir: testPluginsDir,
         logLevel: LogLevel.DEBUG
       });
-      runner.on('console', collectConsoleMessage(logMessages));
+      addConsoleListener(runner, logMessages);
 
       await waitForPluginResolution(runner);
       

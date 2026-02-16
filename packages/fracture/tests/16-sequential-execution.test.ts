@@ -6,8 +6,8 @@
 
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
-import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import type { ExecutionContext, ScriptType, ScopeContext } from '@apiquest/types';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 16: Sequential Script Execution & State Persistence', () => {
   let engine: ScriptEngine;
@@ -20,7 +20,7 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: { name: 'Test Env', variables: {} },
@@ -163,7 +163,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
   
   describe('16.4 Scope variables cleared between request executions', () => {
     test('Scope set in request-pre accessible in same request post', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       // Simulate request-pre
       await engine.execute(`
@@ -181,14 +184,20 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
     });
 
     test('Scope variables NOT accessible across different requests', async () => {
-      // Request 1 - create scopeStack with variables
-      context.scopeStack = [{ level: 'request', id: 'req1', vars: {} }];
+      // Request 1 - create scope with variables
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'req1', vars: {} }
+      ]);
       await engine.execute(`
         quest.scope.variables.set('tempData', 'request1-data');
       `, context, 'request-post' as ScriptType, () => { });
       
       // Clear scope (simulating new request with fresh scope)
-      context.scopeStack = [{ level: 'request', id: 'req2', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'req2', vars: {} }
+      ]);
       
       // Request 2 post-request
       const result = await engine.execute(`
@@ -209,7 +218,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
     test('Iteration data takes precedence over all other scopes', async () => {
       context.iterationData = [{ key: 'iteration-value' }];
       context.iterationCurrent = 1;
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'scope-value' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'scope-value' } }
+      ]);
       context.collectionVariables = { key: 'collection-value' };
       context.globalVariables = { key: 'global-value' };
       
@@ -223,7 +235,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
     });
 
     test('Scope takes precedence over collection/env/global', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: { key: 'scope-value' } }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: { key: 'scope-value' } }
+      ]);
       context.collectionVariables = { key: 'collection-value' };
       context.environment!.variables = { key: 'env-value' };
       context.globalVariables = { key: 'global-value' };
@@ -283,7 +298,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
   
   describe('16.6 Variable mutations visible in subsequent scripts', () => {
     test('quest.variables.set() writes to scope and shadows others', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       context.globalVariables = { key: 'global-original' };
       
       // First script sets via quest.variables
@@ -304,7 +322,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
     });
 
     test('Direct scope modifications are visible', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       await engine.execute(`
         quest.global.variables.set('globalKey', 'globalValue');
@@ -359,7 +380,7 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
       
       expect(result.tests[0]?.passed).toBe(true);
       // Verify in context
-      expect(context.currentRequest?.data.headers?.['Authorization']).toBe('Bearer token123');
+      expect((context.currentRequest?.data.headers as Record<string, string> | undefined)?.['Authorization']).toBe('Bearer token123');
     });
 
     test('Body modified in pre-request persists', async () => {
@@ -449,7 +470,10 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
         name: 'Get User',
         data: { method: 'GET', url: 'https://api.example.com/users/123', headers: {} }
       };
-      context.scopeStack = [{ level: 'request', id: 'req-get-user', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'req-get-user', vars: {} }
+      ]);
       
       await engine.execute(`
         const token = quest.global.variables.get('authToken');
@@ -495,7 +519,7 @@ describe('Section 16: Sequential Script Execution & State Persistence', () => {
       expect(context.globalVariables['authToken']).toBe('session-token-xyz');
       expect(context.globalVariables['userId']).toBe('123');
       expect(context.collectionVariables['baseUrl']).toBe('https://api.example.com');
-      expect(context.scopeStack[0].vars['userName']).toBe('John Doe');
+      expect(context.scope.vars['userName']).toBe('John Doe');
     });
   });
 });

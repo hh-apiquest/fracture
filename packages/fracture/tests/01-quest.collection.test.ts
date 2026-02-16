@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ICookieJar, ScriptType } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 1: quest.collection', () => {
   let engine: ScriptEngine;
@@ -18,7 +18,7 @@ describe('Section 1: quest.collection', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-abc123', name: 'Test Collection' },
       iterationSource : 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-abc123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {
         baseUrl: 'https://api.example.com',

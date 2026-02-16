@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType } from '@apiquest/types';
-import { mockProtocolPlugin, createTestServer, type MockHttpServer, FakeJar } from './test-helpers.js';
+import { mockProtocolPlugin, createTestServer, type MockHttpServer, FakeJar, buildScopeChain } from './test-helpers.js';
 
 describe('Section 13: quest.wait', () => {
   let engine: ScriptEngine;
@@ -30,7 +30,7 @@ describe('Section 13: quest.wait', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: undefined,
@@ -42,7 +42,8 @@ describe('Section 13: quest.wait', () => {
       executionHistory: [],
       options: {},
       protocolPlugin: mockProtocolPlugin,
-      cookieJar: FakeJar
+      cookieJar: FakeJar,
+      abortSignal: new AbortController().signal
     };
   });
 
@@ -208,7 +209,10 @@ describe('Section 13: quest.wait', () => {
     });
 
     test('Can be used in variable assignment flow', async () => {
-      context.scopeStack = [{ level: 'request', id: 'test', vars: {} }];
+      context.scope = buildScopeChain([
+        { level: 'collection', id: 'col-123', vars: {} },
+        { level: 'request', id: 'test', vars: {} }
+      ]);
       
       const script = `
         // Set variable then wait

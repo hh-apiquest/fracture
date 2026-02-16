@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import { ScriptEngine } from '../src/ScriptEngine.js';
 import type { ExecutionContext, ScriptType, ProtocolResponse } from '@apiquest/types';
-import { FakeJar, mockProtocolPlugin } from './test-helpers.js';
+import { FakeJar, mockProtocolPlugin, buildScopeChain } from './test-helpers.js';
 
 describe('Section 4: quest.response', () => {
   let engine: ScriptEngine;
@@ -31,7 +31,7 @@ describe('Section 4: quest.response', () => {
       protocol: 'http',
       collectionInfo: { id: 'col-123', name: 'Test Collection' },
       iterationSource: 'none',
-      scopeStack: [],
+      scope: buildScopeChain([{ level: 'collection', id: 'col-123', vars: {} }]),
       globalVariables: {},
       collectionVariables: {},
       environment: {
@@ -46,7 +46,8 @@ describe('Section 4: quest.response', () => {
       executionHistory: [],
       options: {},
       protocolPlugin: mockProtocolPlugin,
-      cookieJar: FakeJar
+      cookieJar: FakeJar,
+      abortSignal: new AbortController().signal
     };
   });
 

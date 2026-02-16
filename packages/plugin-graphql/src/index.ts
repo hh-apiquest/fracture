@@ -9,6 +9,21 @@ function isNullOrEmpty(value: string | null | undefined): boolean {
 function isNullOrWhitespace(value: string | null | undefined): boolean {
   return value === null || value === undefined || value.trim() === '';
 }
+function buildSummary(
+  status: number,
+  label: string,
+  duration: number,
+  outcome: 'success' | 'error',
+  message?: string
+): ProtocolResponse['summary'] {
+  return {
+    outcome,
+    code: status,
+    label,
+    message,
+    duration
+  };
+}
 
 export const graphqlPlugin: IProtocolPlugin = {
   name: 'GraphQL',
@@ -17,6 +32,66 @@ export const graphqlPlugin: IProtocolPlugin = {
   protocols: ['graphql'],
   supportedAuthTypes: ['bearer', 'basic', 'apikey', 'oauth2'],
   strictAuthList: false,
+  protocolAPIProvider(context: ExecutionContext) {
+    const responseData = (context.currentResponse?.data ?? context.currentResponse ?? {}) as {
+      status?: number;
+      statusText?: string;
+      headers?: Record<string, string | string[]>;
+      body?: string;
+    };
+
+    return {
+      request: {
+        url: (context.currentRequest?.data.url ?? '') as string,
+        method: (context.currentRequest?.data.method ?? '') as string,
+        headers: {
+          toObject() {
+            return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
+          }
+        }
+      },
+      response: {
+        status: responseData.status ?? 0,
+        statusText: responseData.statusText ?? '',
+        headers: {
+          get(name: string) {
+            if (responseData.headers === null || responseData.headers === undefined) return null;
+            const lowerName = name.toLowerCase();
+            for (const [key, value] of Object.entries(responseData.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return value;
+              }
+            }
+            return null;
+          },
+          has(name: string) {
+            if (responseData.headers === null || responseData.headers === undefined) return false;
+            const lowerName = name.toLowerCase();
+            for (const key of Object.keys(responseData.headers)) {
+              if (key.toLowerCase() === lowerName) {
+                return true;
+              }
+            }
+            return false;
+          },
+          toObject() {
+            return responseData.headers ?? {};
+          }
+        },
+        body: responseData.body ?? '',
+        text() {
+          return responseData.body ?? '';
+        },
+        json() {
+          try {
+            return JSON.parse(responseData.body ?? '{}') as unknown;
+          } catch {
+            return {};
+          }
+        }
+      }
+    };
+  },
   dataSchema: {
     type: 'object',
     required: ['url'],
@@ -212,13 +287,21 @@ export const graphqlPlugin: IProtocolPlugin = {
 
       logger?.debug('GraphQL response received', { status: response.statusCode, duration });
 
+      const statusText = (response.statusMessage !== null && response.statusMessage !== undefined && response.statusMessage.length > 0) ? response.statusMessage : '';
       return {
-        status: response.statusCode,
-        statusText: (response.statusMessage !== null && response.statusMessage !== undefined && response.statusMessage.length > 0) ? response.statusMessage : '',
-        headers: normalizedHeaders,
-        body: String(response.body),
-        duration,
-        error: errorMsg
+        data: {
+          status: response.statusCode,
+          statusText,
+          headers: normalizedHeaders,
+          body: String(response.body)
+        },
+        summary: buildSummary(
+          response.statusCode,
+          statusText,
+          duration,
+          'success',
+          errorMsg
+        )
       };
     } catch (err) {
       const duration = Date.now() - startTime;
@@ -254,35 +337,47 @@ export const graphqlPlugin: IProtocolPlugin = {
 
           logger?.debug('GraphQL error response received', { status: error.response.statusCode, duration });
 
+          const statusText = (error.response.statusMessage !== null && error.response.statusMessage !== undefined && error.response.statusMessage.length > 0) ? error.response.statusMessage : '';
           return {
-            status: error.response.statusCode,
-            statusText: (error.response.statusMessage !== null && error.response.statusMessage !== undefined && error.response.statusMessage.length > 0) ? error.response.statusMessage : '',
-            headers: normalizedHeaders,
-            body: String(error.response.body),
-            duration,
-            error: errorResponseMsg
+            data: {
+              status: error.response.statusCode,
+              statusText,
+              headers: normalizedHeaders,
+              body: String(error.response.body)
+            },
+            summary: buildSummary(
+              error.response.statusCode,
+              statusText,
+              duration,
+              'error',
+              errorResponseMsg
+            )
           };
         } else {
           logger?.warn('GraphQL network error', { message: error.message, duration });
+          const message = !isNullOrEmpty(error.message) ? error.message : 'Network request failed';
           return {
-            status: 0,
-            statusText: 'Network Error',
-            headers: {},
-            body: '',
-            duration,
-            error: !isNullOrEmpty(error.message) ? error.message : 'Network request failed'
+            data: {
+              status: 0,
+              statusText: 'Network Error',
+              headers: {},
+              body: ''
+            },
+            summary: buildSummary(0, 'Network Error', duration, 'error', message)
           };
         }
       }
 
       logger?.error('GraphQL unexpected error', { error: err instanceof Error ? err.message : String(err), duration });
+      const message = err instanceof Error ? err.message : String(err);
       return {
-        status: 0,
-        statusText: 'Error',
-        headers: {},
-        body: '',
-        duration,
-        error: err instanceof Error ? err.message : String(err)
+        data: {
+          status: 0,
+          statusText: 'Error',
+          headers: {},
+          body: ''
+        },
+        summary: buildSummary(0, 'Error', duration, 'error', message)
       };
     }
   },

@@ -12,7 +12,7 @@ import type {
   TestResult,
   ScriptResult,
   CollectionRunnerOptions,
-  ScopeFrame,
+  ScopeContext,
   Folder,
   EventEnvelope,
   CollectionInfo,
@@ -58,6 +58,7 @@ export class CollectionRunner extends EventEmitter {
   private shouldDelayNextRequest = false;
   private libraryLoader: LibraryLoader;
   private loadedLibraries: Map<string, unknown> = new Map();
+  private folderScopeById: Map<string, ScopeContext> = new Map();
 
   constructor(options?: CollectionRunnerOptions) {
     super();
@@ -246,7 +247,7 @@ export class CollectionRunner extends EventEmitter {
     }
 
     // Merge runtime options (needed for validation)
-    const runtimeOptions = this.mergeOptions(collection.options, options);
+    const runtimeOptions = this.mergeOptions(collection.options, options, { includeMeta: true, includeProxy: true });
 
     // Validate external libraries flag
     if (runtimeOptions.libraries !== undefined && runtimeOptions.libraries.length > 0) {
@@ -401,12 +402,13 @@ export class CollectionRunner extends EventEmitter {
       }
     }
 
-    // Initialize scope stack with collection scope
-    const scopeStack: ScopeFrame[] = [{
+    // Initialize collection scope (root of scope chain)
+    const collectionScope: ScopeContext = {
       level: 'collection',
       id: collection.info.id,
       vars: {}
-    }];
+    };
+    this.folderScopeById = new Map();
 
     // Execute collection pre-request script once before all iterations
     if (!isNullOrWhitespace(collection.collectionPreScript)) {
@@ -422,14 +424,14 @@ export class CollectionRunner extends EventEmitter {
         protocol: collection.protocol,
         collectionVariables: collection.variables ?? {},
         globalVariables: options.globalVariables ?? {},
-        scopeStack: [...scopeStack],  // Clone scope stack
+        scope: collectionScope,
         environment: options.environment,
         iterationCurrent: 1,
         iterationCount,
         iterationData,
         iterationSource,
         executionHistory: [],
-        options: this.mergeOptions(collection.options, options),
+        options: this.mergeOptions(collection.options, options, { includeMeta: true, includeProxy: true }),
         cookieJar,
         eventEmitter: this,
         protocolPlugin,
@@ -463,7 +465,7 @@ export class CollectionRunner extends EventEmitter {
       options.environment = tempContext.environment;
       
       // Update collection scope with any changes from script
-      Object.assign(scopeStack[0].vars, tempContext.scopeStack[0].vars);
+      Object.assign(collectionScope.vars, tempContext.scope.vars);
     }
 
     for (let i = 0; i < iterationCount; i++) {
@@ -477,14 +479,18 @@ export class CollectionRunner extends EventEmitter {
         protocol: collection.protocol,
         collectionVariables: collection.variables ?? {},
         globalVariables: options.globalVariables ?? {},
-        scopeStack: [...scopeStack],  // Clone scope stack for each iteration
+        scope: {
+          level: 'collection',
+          id: collectionScope.id,
+          vars: { ...collectionScope.vars }
+        },
         environment: options.environment,
         iterationCurrent: i + 1,
         iterationCount,
         iterationData,
         iterationSource,
         executionHistory: [],
-        options: this.mergeOptions(collection.options, options),
+        options: this.mergeOptions(collection.options, options, { includeMeta: true, includeProxy: true }),
         cookieJar,
         eventEmitter: this,
         protocolPlugin,
@@ -511,7 +517,7 @@ export class CollectionRunner extends EventEmitter {
       });
       
       // Update collection scope with changes from iteration
-      Object.assign(scopeStack[0].vars, context.scopeStack[0].vars);
+      Object.assign(collectionScope.vars, context.scope.vars);
       
       // Update global variables and environment for next iteration
       options.globalVariables = context.globalVariables;
@@ -520,6 +526,9 @@ export class CollectionRunner extends EventEmitter {
 
     // Execute collection post-request script once after all iterations
     if (!isNullOrWhitespace(collection.collectionPostScript)) {
+      if (this.isAborted()) {
+        this.logger.warn('Skipping collection post-script due to abort');
+      } else {
       // Emit event before collection post-script execution
       const beforePostEnvelope = this.createEventEnvelope(collection.info, 'collection:/', undefined);
       this.emit('beforeCollectionPostScript', {
@@ -532,14 +541,14 @@ export class CollectionRunner extends EventEmitter {
         protocol: collection.protocol,
         collectionVariables: collection.variables ?? {},
         globalVariables: options.globalVariables ?? {},
-        scopeStack: [...scopeStack],  // Clone scope stack
+        scope: collectionScope,
         environment: options.environment,
         iterationCurrent: iterationCount,
         iterationCount,
         iterationData,
         iterationSource,
         executionHistory: [],
-        options: this.mergeOptions(collection.options, options),
+        options: this.mergeOptions(collection.options, options, { includeMeta: true, includeProxy: true }),
         cookieJar,
         eventEmitter: this,
         protocolPlugin,
@@ -564,8 +573,9 @@ export class CollectionRunner extends EventEmitter {
         result: postScriptResult
       });
 
-      if (postScriptResult.success === false) {
-        throw new Error(`Collection post-script error: ${postScriptResult.error}`);
+        if (postScriptResult.success === false) {
+          throw new Error(`Collection post-script error: ${postScriptResult.error}`);
+        }
       }
     }
 
@@ -619,71 +629,86 @@ export class CollectionRunner extends EventEmitter {
   }
 
   private mergeOptions(
-    collectionOptions?: RuntimeOptions,
-    runOptions?: RunOptions
+    baseOptions?: RuntimeOptions,
+    overrideOptions?: RuntimeOptions,
+    options?: { includeMeta?: boolean; includeProxy?: boolean }
   ): RuntimeOptions {
-    // Since RunOptions extends RuntimeOptions, merge is straightforward
-    // RunOptions takes precedence over collectionOptions
+    const includeMeta = options?.includeMeta ?? true;
+    const includeProxy = options?.includeProxy ?? true;
+    // overrideOptions takes precedence over baseOptions
     const merged: RuntimeOptions = {
-      ...collectionOptions,
-      ...runOptions,
+      ...baseOptions,
+      ...overrideOptions,
       // Deep merge nested objects
       execution: {
-        ...(collectionOptions?.execution ?? {}),
-        ...(runOptions?.execution ?? {})
-      },
-      // Ensure defaults
-      strictMode: runOptions?.strictMode ?? collectionOptions?.strictMode ?? true,
-      // Include filter options (type narrow from undefined)
-      filter: (runOptions?.filter ?? collectionOptions?.filter) !== undefined
-        ? String(runOptions?.filter ?? collectionOptions?.filter)
-        : undefined,
-      excludeDeps: ((runOptions?.excludeDeps ?? collectionOptions?.excludeDeps) !== undefined)
-        ? Boolean(runOptions?.excludeDeps ?? collectionOptions?.excludeDeps)
-        : undefined
+        ...(baseOptions?.execution ?? {}),
+        ...(overrideOptions?.execution ?? {})
+      }
     };
+
+    if (includeMeta) {
+      merged.strictMode = overrideOptions?.strictMode ?? baseOptions?.strictMode ?? true;
+      merged.filter = (overrideOptions?.filter ?? baseOptions?.filter) !== undefined
+        ? String(overrideOptions?.filter ?? baseOptions?.filter)
+        : undefined;
+      merged.excludeDeps = ((overrideOptions?.excludeDeps ?? baseOptions?.excludeDeps) !== undefined)
+        ? Boolean(overrideOptions?.excludeDeps ?? baseOptions?.excludeDeps)
+        : undefined;
+    }
     
     // Conditionally merge optional nested objects
-    if (collectionOptions?.timeout !== undefined || runOptions?.timeout !== undefined) {
+    if (baseOptions?.timeout !== undefined || overrideOptions?.timeout !== undefined) {
       merged.timeout = {
-        ...(collectionOptions?.timeout ?? {}),
-        ...(runOptions?.timeout ?? {})
+        ...(baseOptions?.timeout ?? {}),
+        ...(overrideOptions?.timeout ?? {})
       };
     }
     
-    if (collectionOptions?.ssl !== undefined || runOptions?.ssl !== undefined) {
+    if (baseOptions?.ssl !== undefined || overrideOptions?.ssl !== undefined) {
       merged.ssl = {
-        ...(collectionOptions?.ssl ?? {}),
-        ...(runOptions?.ssl ?? {})
+        ...(baseOptions?.ssl ?? {}),
+        ...(overrideOptions?.ssl ?? {})
       };
     }
     
-    if (collectionOptions?.jar !== undefined || runOptions?.jar !== undefined) {
+    if (baseOptions?.jar !== undefined || overrideOptions?.jar !== undefined) {
       merged.jar = {
-        persist: runOptions?.jar?.persist ?? collectionOptions?.jar?.persist ?? false
+        persist: overrideOptions?.jar?.persist ?? baseOptions?.jar?.persist ?? false
       };
     }
     
-    if (runOptions?.proxy !== null && runOptions?.proxy !== undefined) {
-      merged.proxy = runOptions.proxy;
-    } else if (collectionOptions?.proxy !== null && collectionOptions?.proxy !== undefined) {
-      merged.proxy = collectionOptions.proxy;
+    if (includeProxy) {
+      if (overrideOptions?.proxy !== null && overrideOptions?.proxy !== undefined) {
+        merged.proxy = overrideOptions.proxy;
+      } else if (baseOptions?.proxy !== null && baseOptions?.proxy !== undefined) {
+        merged.proxy = baseOptions.proxy;
+      }
     }
-    
-    // Merge cookies arrays (runOptions cookies + collectionOptions cookies)
-    const collectionCookies = collectionOptions?.cookies ?? [];
-    const runCookies = runOptions?.cookies ?? [];
-    if (collectionCookies.length > 0 || runCookies.length > 0) {
-      // RunOptions cookies override collection cookies with same name
+
+    if (includeMeta) {
+      merged.strictMode = overrideOptions?.strictMode ?? baseOptions?.strictMode ?? true;
+      merged.filter = (overrideOptions?.filter ?? baseOptions?.filter) !== undefined
+        ? String(overrideOptions?.filter ?? baseOptions?.filter)
+        : undefined;
+      merged.excludeDeps = ((overrideOptions?.excludeDeps ?? baseOptions?.excludeDeps) !== undefined)
+        ? Boolean(overrideOptions?.excludeDeps ?? baseOptions?.excludeDeps)
+        : undefined;
+    }
+
+    // Merge cookies arrays (override cookies + base cookies)
+    const baseCookies = baseOptions?.cookies ?? [];
+    const overrideCookies = overrideOptions?.cookies ?? [];
+    if (baseCookies.length > 0 || overrideCookies.length > 0) {
+      // Override cookies override base cookies with same name
       const cookieMap = new Map<string, Cookie>();
       
-      // Add collection cookies first
-      for (const cookie of collectionCookies) {
+      // Add base cookies first
+      for (const cookie of baseCookies) {
         cookieMap.set(cookie.name, cookie);
       }
       
-      // Then add/override with run cookies
-      for (const cookie of runCookies) {
+      // Then add/override with override cookies
+      for (const cookie of overrideCookies) {
         cookieMap.set(cookie.name, cookie);
       }
       
@@ -699,18 +724,20 @@ export class CollectionRunner extends EventEmitter {
    */
   private async evaluateCondition(condition: string, context: ExecutionContext): Promise<boolean> {
     try {
-      // Use workaround: store result in global variable
-      const wrappedScript = `
-        const __conditionResult = (${condition});
-        quest.global.variables.set('__conditionResult', String(__conditionResult === true));
-      `;
-      
-      const result = await this.scriptEngine.execute(
-        wrappedScript,
-        context,
-        ScriptType.PreRequest,
-        () => {}
-      );
+      // Use workaround: store result in global variable (serialized)
+      const result = await this.queueScript(async () => {
+        const wrappedScript = `
+          const __conditionResult = (${condition});
+          quest.global.variables.set('__conditionResult', String(__conditionResult === true));
+        `;
+        
+        return await this.scriptEngine.execute(
+          wrappedScript,
+          context,
+          ScriptType.PreRequest,
+          () => {}
+        );
+      });
       
       if (result.success === false) {
         this.logger.warn(`Condition evaluation error: ${result.error}`);
@@ -918,12 +945,22 @@ export class CollectionRunner extends EventEmitter {
     }
     const folder = node.item as Folder;
     
-    // PUSH folder scope
-    context.scopeStack.push({
+    const parentScope = node.parentFolderItemId !== undefined
+      ? this.folderScopeById.get(node.parentFolderItemId)
+      : context.scope;
+
+    if (parentScope === undefined) {
+      throw new Error(`Missing parent scope for folder '${folder.id}'`);
+    }
+
+    const folderScope: ScopeContext = {
       level: 'folder',
       id: folder.id,
-      vars: {}
-    });
+      vars: {},
+      parent: parentScope
+    };
+
+    this.folderScopeById.set(folder.id, folderScope);
 
     // Emit beforeFolder event
     const beforeFolderEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context);
@@ -947,12 +984,9 @@ export class CollectionRunner extends EventEmitter {
     }
     const folder = node.item as Folder;
 
-    // Check if folder scope exists on stack before popping
-    // (folder-enter may have been skipped due to condition)
-    const topScope = context.scopeStack[context.scopeStack.length - 1];
-    if (topScope?.level === 'folder' && topScope.id === folder.id) {
-      // POP folder scope
-      context.scopeStack.pop();
+    const folderScope = this.folderScopeById.get(folder.id);
+    if (folderScope !== undefined) {
+      this.folderScopeById.delete(folder.id);
 
       // Emit afterFolder event
       const afterFolderEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context);
@@ -961,7 +995,6 @@ export class CollectionRunner extends EventEmitter {
         duration: 0
       });
     }
-    // If scope doesn't match, folder-enter was skipped - no POP or event needed
   }
 
   private async executeFolderPreScript(
@@ -1101,6 +1134,13 @@ export class CollectionRunner extends EventEmitter {
         success: true,
         tests: [],
         duration: 0,
+        summary: {
+          outcome: 'success',
+          code: 'skipped',
+          label: 'Skipped',
+          message: 'Skipped by bail',
+          duration: 0
+        },
         iteration: context.iterationCurrent,
         scriptError: 'Skipped by bail'
       };
@@ -1115,6 +1155,13 @@ export class CollectionRunner extends EventEmitter {
         success: true,
         tests: [],
         duration: 0,
+        summary: {
+          outcome: 'success',
+          code: 'skipped',
+          label: 'Skipped',
+          message: 'Skipped by condition',
+          duration: 0
+        },
         iteration: context.iterationCurrent,
         scriptError: 'Skipped by condition'
       };
@@ -1129,23 +1176,58 @@ export class CollectionRunner extends EventEmitter {
       path: node.path
     });
 
-    // PUSH request scope
-    context.scopeStack.push({
-      level: 'request',
-      id: request.id,
-      vars: {}
-    });
+    const parentScope = node.parentFolderItemId !== undefined
+      ? this.folderScopeById.get(node.parentFolderItemId)
+      : context.scope;
+
+    if (parentScope === undefined) {
+      throw new Error(`Missing parent scope for request '${request.id}'`);
+    }
+
+    const requestOptions = this.mergeOptions(context.options, request.options, { includeMeta: false, includeProxy: false });
+
+    const requestContext: ExecutionContext = {
+      ...context,
+      scope: {
+        level: 'request',
+        id: request.id,
+        vars: {},
+        parent: parentScope
+      },
+      options: requestOptions
+    };
+
+    // For persist=false, use a per-request cookie jar to avoid cross-request leakage
+    if (requestContext.options.jar?.persist !== true) {
+      requestContext.cookieJar = new CookieJar({ persist: false });
+
+      // Inject initial cookies for this request (merged from collection/run/request options)
+      const initialCookies = requestContext.options.cookies ?? [];
+      for (const cookie of initialCookies) {
+        if (cookie.domain === null || cookie.domain === undefined) {
+          continue;
+        }
+        requestContext.cookieJar.set(cookie.name, cookie.value, {
+          domain: cookie.domain,
+          path: cookie.path,
+          expires: cookie.expires,
+          httpOnly: cookie.httpOnly,
+          secure: cookie.secure,
+          sameSite: cookie.sameSite
+        });
+      }
+    }
 
     try {
       // Execute all pre-request scripts (inherited + request-level) through queue
       if (node.inheritedPreScripts !== undefined && node.inheritedPreScripts.length > 0) {
         await this.queueScript(async () => {
           // Set currentRequest inside the queued function to avoid race conditions in parallel execution
-          context.currentRequest = request;
+          requestContext.currentRequest = request;
           this.logger.debug(`Executing pre-script for request: id=${request.id}, name=${request.name}`);
           for (const script of node.inheritedPreScripts!) {
             // Emit beforePreScript event
-            const beforePreEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+            const beforePreEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
             this.emit('beforePreScript', {
               ...beforePreEnvelope,
               request,
@@ -1154,14 +1236,14 @@ export class CollectionRunner extends EventEmitter {
 
             const preScriptResult = await this.scriptEngine.execute(
               script,
-              context,
+              requestContext,
               ScriptType.PreRequest,
               () => {} // Pre-request scripts cannot have tests
             );
             this.emitConsoleOutput(preScriptResult.consoleOutput);
 
             // Emit afterPreScript event
-            const afterPreEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+            const afterPreEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
             this.emit('afterPreScript', {
               ...afterPreEnvelope,
               request,
@@ -1182,7 +1264,7 @@ export class CollectionRunner extends EventEmitter {
 
       // HTTP execution NOT queued - runs in parallel
       // Set currentRequest before I/O phase
-      context.currentRequest = request;
+      requestContext.currentRequest = request;
       
       // Apply effective auth from node (collection/folder auth inheritance)
       // Request auth > Folder auth > Collection auth
@@ -1190,7 +1272,7 @@ export class CollectionRunner extends EventEmitter {
         request.auth = node.effectiveAuth;
       }
       
-      this.resolveRequest(request, context);
+      this.resolveRequest(request, requestContext);
       
       // Track plugin event tests and indices
       const pluginEventTests: TestResult[] = [];
@@ -1211,42 +1293,42 @@ export class CollectionRunner extends EventEmitter {
         const currentIndex = eventIndices.get(eventName) ?? 0;
         
         // Set event context (wrapped in try/finally to prevent state leak)
-        try {
-          context.currentEvent = {
-            eventName: eventName,
-            requestId: request.id,
-            timestamp: new Date(),
-            data: eventData,
-            index: currentIndex
-          };
-          
-          // Execute plugin event script through the queue (serialized)
-          const result = await this.queueScript(async () => {
-            return await this.scriptEngine.execute(
-              eventScript.script,
-              context,
-              ScriptType.PluginEvent,
-              (test: TestResult) => {
-                // Emit assertion event for plugin event test
-                const eventDef = context.protocolPlugin.events?.find(e => e.name === eventName);
-                if (eventDef?.canHaveTests === true) {
-                  const envelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
-                  this.emit('assertion', {
-                    ...envelope,
-                    test,
-                    event: eventName
-                  });
-                }
+          try {
+            // Execute plugin event script through the queue (serialized)
+            const result = await this.queueScript(async () => {
+              requestContext.currentEvent = {
+                eventName: eventName,
+                requestId: request.id,
+                timestamp: new Date(),
+                data: eventData,
+                index: currentIndex
+              };
+              requestContext.currentRequest = request;
+              return await this.scriptEngine.execute(
+                eventScript.script,
+                requestContext,
+                ScriptType.PluginEvent,
+                (test: TestResult) => {
+                  // Emit assertion event for plugin event test
+                  const eventDef = requestContext.protocolPlugin.events?.find(e => e.name === eventName);
+                  if (eventDef?.canHaveTests === true) {
+                    const envelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
+                    this.emit('assertion', {
+                      ...envelope,
+                      test,
+                      event: eventName
+                    });
+                  }
 
-                // Trigger bail on failed test if enabled
-                if (this.bailEnabled && this.ownsController && !test.passed && !test.skipped) {
-                  this.abort('Test failure (--bail)');
+                  // Trigger bail on failed test if enabled
+                  if (this.bailEnabled && this.ownsController && !test.passed && !test.skipped) {
+                    this.abort('Test failure (--bail)');
+                  }
                 }
-              }
-            );
-          });
-          
-          this.emitConsoleOutput(result.consoleOutput);
+              );
+            });
+            
+            this.emitConsoleOutput(result.consoleOutput);
           
           // Collect test results - add directly to pluginEventTests array
           if (result.tests !== undefined && result.tests.length > 0) {
@@ -1262,15 +1344,15 @@ export class CollectionRunner extends EventEmitter {
           }
         } finally {
           // Always reset event context to prevent state leak
-          context.currentEvent = undefined;
-          
-          // Increment event index for next event of same type
-          eventIndices.set(eventName, currentIndex + 1);
-        }
-      };
+            requestContext.currentEvent = undefined;
+            
+            // Increment event index for next event of same type
+            eventIndices.set(eventName, currentIndex + 1);
+          }
+        };
       
       // Emit beforeRequest event
-      const beforeRequestEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+      const beforeRequestEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
       this.emit('beforeRequest', {
         ...beforeRequestEnvelope,
         request,
@@ -1280,19 +1362,19 @@ export class CollectionRunner extends EventEmitter {
       const response = await this.pluginManager.execute(
         context.protocol,
         request,  // Use request directly instead of context.currentRequest
-        context,
-        context.options,
+        requestContext,
+        requestContext.options,
         emitEvent
       );
-      context.currentResponse = response;
+      requestContext.currentResponse = response;
       
       // Emit afterRequest event with duration from plugin (excludes delay)
-      const afterRequestEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+      const afterRequestEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
       this.emit('afterRequest', {
         ...afterRequestEnvelope,
         request,
         response,
-        duration: response.duration
+        duration: response.summary.duration
       });
 
       // Add preliminary execution record to history
@@ -1300,13 +1382,13 @@ export class CollectionRunner extends EventEmitter {
         id: request.id,
         name: request.name,
         path: node.path,
-        iteration: context.iterationCurrent,
+        iteration: requestContext.iterationCurrent,
         response,
         tests: [...pluginEventTests],
         timestamp: new Date().toISOString()
       };
 
-      context.executionHistory.push(executionRecord);
+      requestContext.executionHistory.push(executionRecord);
 
       // Execute all post-request scripts (request-level + inherited) through queue
       let scriptResult: ScriptResult = { success: true, tests: [], consoleOutput: [] };
@@ -1316,12 +1398,12 @@ export class CollectionRunner extends EventEmitter {
       if (node.inheritedPostScripts !== undefined && node.inheritedPostScripts.length > 0) {
         scriptResult = await this.queueScript(async () => {
           // Set currentRequest inside the queued function to avoid race conditions in parallel execution
-          context.currentRequest = request;
+          requestContext.currentRequest = request;
           const combinedResult: ScriptResult = { success: true, tests: [], consoleOutput: [] };
 
           for (const script of node.inheritedPostScripts!) {
             // Emit beforePostScript event
-            const beforePostEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+            const beforePostEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
             this.emit('beforePostScript', {
               ...beforePostEnvelope,
               request,
@@ -1331,11 +1413,11 @@ export class CollectionRunner extends EventEmitter {
 
             const postScriptResult = await this.scriptEngine.execute(
               script,
-              context,
+              requestContext,
               ScriptType.PostRequest,
               (test: TestResult) => {
                 // Emit assertion event
-                const envelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+                const envelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
                 this.emit('assertion', {
                   ...envelope,
                   test,
@@ -1351,7 +1433,7 @@ export class CollectionRunner extends EventEmitter {
             this.emitConsoleOutput(postScriptResult.consoleOutput);
 
             // Emit afterPostScript event
-            const afterPostEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+            const afterPostEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
             this.emit('afterPostScript', {
               ...afterPostEnvelope,
               request,
@@ -1384,15 +1466,16 @@ export class CollectionRunner extends EventEmitter {
         requestId: request.id,
         requestName: request.name,
         path: node.path,
-        success: isNullOrEmpty(response.error),
+        success: response.summary.outcome === 'success',
         response,
         tests: allTests,
-        duration: response.duration,
-        iteration: context.iterationCurrent
+        duration: response.summary.duration ?? 0,
+        summary: response.summary,
+        iteration: requestContext.iterationCurrent
       };
 
       // Emit afterItem event
-      const afterItemEnvelope = this.createEventEnvelope(context.collectionInfo, node.path, context, request);
+      const afterItemEnvelope = this.createEventEnvelope(requestContext.collectionInfo, node.path, requestContext, request);
       this.emit('afterItem', {
         ...afterItemEnvelope,
         request,
@@ -1402,12 +1485,9 @@ export class CollectionRunner extends EventEmitter {
       });
       
       // Clear cookies if persist is false
-      if (context.options.jar?.persist !== true) {
-        context.cookieJar.clear();
+      if (requestContext.options.jar?.persist !== true) {
+        requestContext.cookieJar.clear();
       }
-      
-      // POP request scope
-      context.scopeStack.pop();
       
       return result;
     } catch (error) {
@@ -1419,9 +1499,16 @@ export class CollectionRunner extends EventEmitter {
         path: node.path,
         success: false,
         tests: [],
-        duration: context.currentResponse?.duration ?? 0,
+        duration: requestContext.currentResponse?.summary?.duration ?? 0,
+        summary: requestContext.currentResponse?.summary ?? {
+          outcome: 'error',
+          code: 'script',
+          label: 'Script Error',
+          message: err.message ?? String(error),
+          duration: requestContext.currentResponse?.summary?.duration ?? 0
+        },
         scriptError: err.message ?? String(error),
-        iteration: context.iterationCurrent
+        iteration: requestContext.iterationCurrent
       };
 
       const phase = err.phase ?? 'request';
@@ -1431,11 +1518,8 @@ export class CollectionRunner extends EventEmitter {
         phase,
         request,
         path: node.path,
-        response: context.currentResponse
+        response: requestContext.currentResponse
       });
-      
-      // POP request scope even on error
-      context.scopeStack.pop();
       
       // Abort execution to prevent further requests from running (fail-fast)
       this.abort(`Script error in ${phase}: ${result.scriptError}`);
