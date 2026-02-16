@@ -3,6 +3,9 @@ import FormData from 'form-data';
 import type { IProtocolPlugin, Request, ExecutionContext, ProtocolResponse, ValidationResult, ValidationError, RuntimeOptions, ILogger } from '@apiquest/types';
 import { HttpProxyAgent, HttpsProxyAgent } from 'hpagent';
 
+// Export types for external consumption
+export type { HttpResponseData, HttpBodyMode, HttpBodyKV, HttpBodyData, HttpRequestData } from './types.js';
+
 interface BodyObject {
   mode?: string;
   raw?: string;
