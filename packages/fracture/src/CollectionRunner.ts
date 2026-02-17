@@ -769,25 +769,37 @@ export class CollectionRunner extends EventEmitter {
     context: ExecutionContext,
     results: RequestResult[]
   ): Promise<void> {
-    // Determine execution mode
+    // Determine execution mode based on both allowParallel and maxConcurrency
     const allowParallel = context.options.execution?.allowParallel === true;
+    let maxConcurrency = context.options.execution?.maxConcurrency ?? 1;
     
-    // Build TaskGraph from collection (DAG structure depends on execution mode)
-    this.logger.debug(`Building TaskGraph from collection (parallel=${allowParallel})`);
-    const taskGraph = new TaskGraph(this.logger);
-    taskGraph.build(collection, allowParallel);
-    this.logger.debug(`TaskGraph built: ${taskGraph.getNodes().size} nodes, ${taskGraph.getEdges().length} edges`);
-
-    // Determine concurrency (0 defaults to 1)
-    let maxConcurrency = allowParallel
-      ? (context.options.execution?.maxConcurrency ?? 5)
-      : 1;  // Sequential mode uses concurrency=1
+    // Validate parallel execution: allowed by collection AND requested by user (concurrency > 1)
+    let isParallelMode = false;
+    if (maxConcurrency > 1) {
+      if (allowParallel) {
+        isParallelMode = true;
+      } else {
+        // User requested parallel (concurrency > 1) but collection doesn't allow it
+        this.logger.warn(
+          `Collection does not allow parallel execution (allowParallel=false). ` +
+          `Requested concurrency=${maxConcurrency} will be ignored. Running sequentially with concurrency=1.`
+        );
+        maxConcurrency = 1;
+      }
+    }
     
     // Treat 0 as 1 (invalid value)
     if (maxConcurrency === 0) {
       this.logger.warn('maxConcurrency=0 is invalid, defaulting to 1');
       maxConcurrency = 1;
+      isParallelMode = false;
     }
+    
+    // Build TaskGraph from collection (DAG structure depends on execution mode)
+    this.logger.debug(`Building TaskGraph from collection (parallel=${isParallelMode})`);
+    const taskGraph = new TaskGraph(this.logger);
+    taskGraph.build(collection, isParallelMode);
+    this.logger.debug(`TaskGraph built: ${taskGraph.getNodes().size} nodes, ${taskGraph.getEdges().length} edges`);
     
     this.logger.info(`DAG execution mode: ${maxConcurrency === 1 ? 'SEQUENTIAL' : `PARALLEL (concurrency=${maxConcurrency})`}`);
 
@@ -1115,9 +1127,13 @@ export class CollectionRunner extends EventEmitter {
     // Apply execution.delay between requests (not before first, not if parallel, not if skipped)
     if (!flags.skip && !flags.bail) {
       const delay = context.options?.execution?.delay ?? 0;
-      const isParallel = context.options?.execution?.allowParallel ?? false;
+      const maxConcurrency = context.options?.execution?.maxConcurrency ?? 1;
+      const allowParallel = context.options?.execution?.allowParallel ?? false;
       
-      if (this.shouldDelayNextRequest && delay > 0 && !isParallel) {
+      // Only delay in sequential mode (concurrency=1) or if parallel is not allowed
+      const isActuallyParallel = allowParallel && maxConcurrency > 1;
+      
+      if (this.shouldDelayNextRequest && delay > 0 && !isActuallyParallel) {
         this.logger.debug(`Delaying ${delay}ms before request`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }

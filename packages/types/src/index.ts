@@ -178,10 +178,10 @@ export interface RuntimeOptions {
 }
 
 export interface ExecutionOptions {
-  allowParallel?: boolean;   // Enable parallel execution
-  maxConcurrency?: number;   // Max parallel requests
+  allowParallel?: boolean;   // Allow parallel execution (permission flag set by collection)
+  maxConcurrency?: number;   // Max concurrent requests (default: 1). Parallel mode activates when allowParallel=true AND maxConcurrency>1
   bail?: boolean;            // Stop on first failure
-  delay?: number;            // Delay between requests (ms)
+  delay?: number;            // Delay between requests in ms (only applies in sequential mode, i.e. when maxConcurrency=1)
 }
 
 export interface ExternalLibrary {

@@ -26,6 +26,7 @@ export default {
       tsconfig: './tsconfig.json',
       sourceMap: true,
       declaration: false, // We'll use tsc for declarations
+      declarationMap: false,
     }),
   ],
 };

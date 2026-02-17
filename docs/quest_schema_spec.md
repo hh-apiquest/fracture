@@ -64,10 +64,10 @@ interface RuntimeOptions {
   
   // Execution control
   execution?: {
-    allowParallel?: boolean;    // Enable parallel execution (default: false)
-    maxConcurrency?: number;    // Max parallel requests (default: 5)
-    bail?: boolean;             // Stop on first failure (default: false)
-    delay?: number;             // Delay between requests in ms (default: 0)
+    allowParallel?: boolean;    // Permission flag to allow parallel execution (default: false)
+    maxConcurrency?: number;    // Maximum concurrent requests (default: 1)
+    bail?: boolean;             // Stop execution on first failure (default: false)
+    delay?: number;             // Delay between requests in milliseconds, sequential mode only (default: 0)
   };
   
   // Log level control

@@ -1056,10 +1056,10 @@ const hash = CryptoJS.SHA256(quest.request.body.get());
 {
   "options": {
     "execution": {
-      "allowParallel": true,      // REQUIRED: Allows parallel execution
-      "maxConcurrency": 5,        // Default max concurrent requests
-      "bail": false,              // Continue on failures
-      "delay": 100                // Delay between requests (ms)
+      "allowParallel": true,      // Permission flag to allow parallel execution
+      "maxConcurrency": 5,        // Maximum concurrent requests (default: 1)
+      "bail": false,              // Stop execution on first failure
+      "delay": 100                // Delay between requests in milliseconds (sequential mode only)
     }
   }
 }
@@ -1068,15 +1068,18 @@ const hash = CryptoJS.SHA256(quest.request.body.get());
 **CLI activates parallel execution:**
 ```bash
 # Run in parallel (requires allowParallel: true in collection)
-fracture run collection.json --parallel
+fracture run collection.json --concurrency 5
 
-# Override max concurrency
-fracture run collection.json --parallel --concurrency 10
+# Override max concurrency to 10
+fracture run collection.json --concurrency 10
+
+# Sequential mode (default)
+fracture run collection.json
 ```
 
 **How it works:**
 - Collection must have `allowParallel: true` to enable parallel capability
-- CLI `--parallel` flag activates parallel execution
-- CLI `--concurrency N` overrides collection's `maxConcurrency`
-- Without CLI `--parallel`, requests run sequentially regardless of `allowParallel`
+- CLI `--concurrency N` (where N > 1) activates parallel execution
+- Default concurrency is 1 (sequential mode)
+- If `allowParallel: false` and user tries `--concurrency > 1`, a warning is shown and execution falls back to sequential
 - Requests execute in parallel based on `dependsOn` dependency graph

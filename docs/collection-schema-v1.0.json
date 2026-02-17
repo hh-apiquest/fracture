@@ -197,19 +197,19 @@
       "properties": {
         "allowParallel": {
           "type": "boolean",
-          "description": "Enable parallel execution"
+          "description": "Permission flag to allow parallel execution. Parallel mode activates when true AND CLI concurrency > 1"
         },
         "maxConcurrency": {
           "type": "number",
-          "description": "Max parallel requests"
+          "description": "Maximum concurrent requests when parallel execution is enabled (defaults to 1 for sequential)"
         },
         "bail": {
           "type": "boolean",
-          "description": "Stop on first failure"
+          "description": "Stop execution on first failure"
         },
         "delay": {
           "type": "number",
-          "description": "Delay between requests in milliseconds"
+          "description": "Delay between requests in milliseconds (applies in sequential mode only)"
         }
       }
     },

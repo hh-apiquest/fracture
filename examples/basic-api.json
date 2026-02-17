@@ -1,15 +1,20 @@
 {
-  "$schema": "https://apiquest.net/schemas/collection-v1.0.json",
+  "$schema": "https://apiquest.net/schema/v1.0.json",
   "info": {
     "id": "basic-api",
     "name": "Basic API Test Collection",
     "version": "1.0.0",
     "description": "Sample HTTP requests to test ApiQuest functionality"
   },
+  "protocol": "http",
   "variables": {
     "baseUrl": "https://jsonplaceholder.typicode.com"
   },
-  "protocol": "http",
+  "options":{
+    "execution": {
+      "allowParallel": true
+    }
+  },
   "items": [
     {
       "type": "request",
@@ -20,9 +25,15 @@
         "url": "{{baseUrl}}/posts/1",
         "headers": {
           "Accept": "application/json"
+        },
+        "body": {
+          "mode": "none",
+          "language": "text/plain"
         }
       },
-      "postRequestScript": "quest.test('Status is 200', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Response has userId', () => {\n  const body = quest.response.json();\n  expect(body).to.have.property('userId');\n});\n\nquest.test('Response has title', () => {\n  const body = quest.response.json();\n  expect(body.title).to.be.a('string');\n  expect(body.title.length).to.be.greaterThan(0);\n});"
+      "postRequestScript": "quest.test('Status is 200-3', () => {\r\n  expect(quest.response.status).to.equal(200);\r\n});\r\n\r\nquest.test('Response has userId', () => {\r\n  const body = quest.response.json();\r\n  expect(body).to.have.property('userId');\r\n});\r\n\r\nquest.test('Response has title', () => {\r\n  const body = quest.response.json();\r\n  expect(body.title).to.be.a('string');\r\n  expect(body.title.length).to.be.greaterThan(0);\r\n});",
+      "preRequestScript": "",
+      "description": ""
     },
     {
       "type": "request",
@@ -35,7 +46,13 @@
           "Accept": "application/json"
         }
       },
-      "postRequestScript": "quest.test('Status is 200', () => {\n  expect(quest.response.status).to.equal(200);\n});\n\nquest.test('Response is array', () => {\n  const body = quest.response.json();\n  expect(body).to.be.an('array');\n});\n\nquest.test('Has multiple posts', () => {\n  const body = quest.response.json();\n  expect(body.length).to.be.greaterThan(5);\n});\n\nquest.test('Each post has required fields', () => {\n  const body = quest.response.json();\n  const firstPost = body[0];\n  expect(firstPost).to.have.property('id');\n  expect(firstPost).to.have.property('title');\n  expect(firstPost).to.have.property('body');\n});"
+      "postRequestScript": "quest.test('Status is 200-2', () => {\r\n  expect(quest.response.status).to.equal(200);\r\n});\r\n\r\nquest.test('Response is array', () => {\r\n  const body = quest.response.json();\r\n  expect(body).to.be.an('array');\r\n});\r\n\r\nquest.test('Has multiple posts', () => {\r\n  const body = quest.response.json();\r\n  expect(body.length).to.be.greaterThan(5);\r\n});\r\n\r\nquest.test('Each post has required fields', () => {\r\n  const body = quest.response.json();\r\n  const firstPost = body[0];\r\n  expect(firstPost).to.have.property('id');\r\n  expect(firstPost).to.have.property('title');\r\n  expect(firstPost).to.have.property('body');\r\n});",
+      "description": "",
+      "preRequestScript": "",
+      "dependsOn": [
+        "req-1"
+      ],
+      "condition": "1==1"
     },
     {
       "type": "request",
@@ -48,9 +65,19 @@
           "Content-Type": "application/json",
           "Accept": "application/json"
         },
-        "body": "{\"title\": \"Test Post\", \"body\": \"This is a test\", \"userId\": 1}"
+        "body": {
+          "mode": "raw",
+          "language": "application/json",
+          "raw": "{\r\n  \"title\" : \"Test Post\"\r\n}"
+        }
       },
-      "postRequestScript": "console.log('Response body:', quest.response.body);\n\nquest.test('Status is 201', () => {\n  expect(quest.response.status).to.equal(201);\n});\n\nquest.test('Response contains created post', () => {\n  const body = quest.response.json();\n  console.log('Parsed body:', JSON.stringify(body));\n  console.log('Body title:', body.title);\n  expect(body).to.have.property('id');\n  expect(body).to.have.property('title');\n  if (body.title) {\n    expect(body.title).to.equal('Test Post');\n  }\n});"
+      "postRequestScript": "console.log('Response body:', quest.response.body);\r\n\r\nquest.test('Status is 201-1', () => {\r\n  expect(quest.response.status).to.equal(201);\r\n});\r\n\r\nquest.test('Response contains created post', () => {\r\n  const body = quest.response.json();\r\n  console.log('Parsed body:', JSON.stringify(body));\r\n  console.log('Body title:', body.title);\r\n  expect(body).to.have.property('id');\r\n  expect(body).to.have.property('title');\r\n  if (body.title) {\r\n    expect(body.title).to.equal('Test Post');\r\n  }\r\n});",
+      "preRequestScript": "",
+      "description": ""
     }
-  ]
+  ],
+  "collectionPreScript": "",
+  "collectionPostScript": "",
+  "preRequestScript": "",
+  "postRequestScript": ""
 }

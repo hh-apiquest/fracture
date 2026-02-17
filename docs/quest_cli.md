@@ -262,15 +262,16 @@ fracture run <collection> [options]
 
 #### Execution Control
 ```bash
-    --parallel                    Enable parallel execution
-    --concurrency <number>        Max concurrent requests (default: 5)
+    --concurrency <number>        Max concurrent requests (default: 1 for sequential)
     --bail                        Stop on first test failure (any failed assertion)
     --delay <ms>                  Delay between requests in milliseconds (sequential mode only)
 ```
 
 **Parallel Execution:**
-- `--parallel` enables DAG-based parallel execution, running dependency-free requests concurrently
-- Default `--concurrency` is 5; use `--concurrency 1` for sequential mode without `--parallel` flag
+- Parallel mode activates when collection has `allowParallel: true` AND `--concurrency > 1`
+- Default `--concurrency` is 1 (sequential mode)
+- Use `--concurrency N` (where N > 1) to enable parallel execution with N concurrent requests
+- If collection has `allowParallel: false`, parallel requests are rejected with a warning
 - Scripts remain serialized to maintain state consistency (no variable race conditions)
 - Respects `dependsOn` fields on requests and folders for explicit dependencies
 - Folder-level dependencies: can make a folder depend on completion of another folder/request
@@ -1028,8 +1029,8 @@ fracture run collection.json --data users.csv
 ### Parallel Execution
 
 ```bash
-# Enable parallel execution for better performance
-fracture run collection.json --parallel --concurrency 5
+# Enable parallel execution for better performance (requires collection allowParallel: true)
+fracture run collection.json --concurrency 5
 ```
 
 ### Selective Execution

@@ -1178,10 +1178,10 @@ ApiQuest uses a Directed Acyclic Graph (DAG) scheduler for all execution, suppor
 
 **CLI Override:**
 ```bash
-# Parallel mode with 10 concurrent requests
-fracture run collection.json --parallel --concurrency 10 --bail
+# Parallel mode with 10 concurrent requests (requires collection allowParallel: true)
+fracture run collection.json --concurrency 10 --bail
 
-# Sequential mode (concurrency=1, no --parallel flag needed)
+# Sequential mode (default concurrency=1)
 fracture run collection.json --bail
 ```
 

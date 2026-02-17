@@ -19,7 +19,6 @@ interface CLIOptions {
   iterations?: number;
   filter?: string;
   filterExcludeDeps?: boolean;
-  parallel?: boolean;
   concurrency?: number;
   bail?: boolean;
   delay?: number;
@@ -39,7 +38,7 @@ interface CLIOptions {
   cookieJarPersist?: boolean;
   silent?: boolean;
   color?: boolean;
-  strictMode?: boolean;
+  strictMode?:boolean;
   reporters?: string;
   out?: string;
   pluginsDir?: string[];
@@ -116,8 +115,7 @@ program
   .option('--filter <pattern>', 'Filter requests by path using regex pattern')
   .option('--filter-exclude-deps', 'Exclude dependencies when filtering')
   // Execution Control
-  .option('--parallel', 'Enable parallel execution')
-  .option('--concurrency <number>', 'Max concurrent requests', parseInt)
+  .option('--concurrency <number>', 'Max concurrent requests (default: 1 for sequential)', parseInt)
   .option('--bail', 'Stop on first test failure')
   .option('--delay <ms>', 'Delay between requests in milliseconds', parseInt)
   // Timeouts
@@ -326,8 +324,7 @@ program
         
         // RuntimeOptions - Execution
         execution: {
-          ...(options.parallel !== undefined ? { allowParallel: options.parallel } : {}),
-          ...(options.concurrency !== undefined ? { maxConcurrency: options.concurrency } : {}),
+          ...(options.concurrency !== undefined ? { maxConcurrency: options.concurrency } : { maxConcurrency: 1 }),
           ...(options.bail !== undefined ? { bail: options.bail } : {}),
           ...(options.delay !== undefined ? { delay: options.delay } : {})
         },
