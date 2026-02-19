@@ -209,8 +209,8 @@ export class ScriptEngine {
     
     const allowedModules: Record<string, unknown> = {
       'chai': chai as unknown,
-      'lodash': lodash as unknown,
-      'moment': moment as unknown
+      'lodash': (lodash as unknown as { default: unknown }).default,
+      'moment': (moment as unknown as { default: unknown }).default
     };
     
     return (moduleName: string) => {
