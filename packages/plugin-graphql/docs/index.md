@@ -14,7 +14,7 @@ fracture plugin install graphql
 
 ## Protocol API
 
-The GraphQL plugin extends the [`quest`](../../fracture/docs/api_reference.md:1) object with GraphQL-specific properties.
+The GraphQL plugin extends the [`quest`](../../fracture/api_reference) object with GraphQL-specific properties.
 
 ### quest.request
 

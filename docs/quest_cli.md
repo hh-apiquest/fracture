@@ -1,4 +1,4 @@
-# Quest CLI Architecture - @apiquest/fracture
+# ApiQuest CLI Architecture - @apiquest/fracture
 
 ## Overview
 

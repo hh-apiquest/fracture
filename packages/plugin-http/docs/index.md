@@ -14,7 +14,7 @@ fracture plugin install http
 
 ## Protocol API
 
-The HTTP plugin extends the [`quest`](../../fracture/docs/api_reference.md:1) object with HTTP-specific properties and methods via [`protocolAPIProvider()`](../../types/src/index.ts:520).
+The HTTP plugin extends the [`quest`](../../fracture/api_reference) object with HTTP-specific properties and methods via [`protocolAPIProvider()`].
 
 ### quest.request
 
@@ -107,7 +107,7 @@ quest.response.to.have.jsonBody('userId')      // true if JSON body has field
 
 ## Request Data Structure
 
-Basic structure (see [Collection Schema](../../fracture/docs/quest_schema_spec.md) for full details):
+Basic structure (see [Collection Schema](../../fracture/quest_schema_spec.md) for full details):
 
 ```json
 {
@@ -272,7 +272,7 @@ Works with authentication plugins (e.g., `@apiquest/plugin-auth`). Authenticatio
 }
 ```
 
-See [Authentication Plugins](../plugin-auth/docs/index.md) for details.
+See [Authentication Plugins](../plugin-auth/index.md) for details.
 
 ## Cookie Management
 
@@ -281,7 +281,7 @@ The HTTP plugin integrates with Fracture's cookie jar ([`ICookieJar`](../../type
 - Stores `Set-Cookie` headers from responses (including error responses)
 - Cookies persist across requests in the same run (unless disabled via [`options.jar.persist`](../../types/src/index.ts:218))
 
-Access cookies in scripts via [`quest.cookies`](../../fracture/docs/api_reference.md#questcookies).
+Access cookies in scripts via [`quest.cookies`](../../fracture/api_reference.md#questcookies).
 
 ## Plugin Configuration
 

@@ -14,7 +14,7 @@ fracture plugin install sse
 
 ##Protocol API
 
-The SSE plugin extends the [`quest`](../../fracture/docs/api_reference.md:1) object with SSE-specific properties for event-driven testing.
+The SSE plugin extends the [`quest`](../../fracture/api_reference) object with SSE-specific properties for event-driven testing.
 
 ### quest.message
 
