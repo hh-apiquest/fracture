@@ -51,4 +51,4 @@ JSON Schema: https://apiquest.net/schemas/collection-v1.0.json
 
 ## License
 
-Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE.txt for details.
+Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE for details.

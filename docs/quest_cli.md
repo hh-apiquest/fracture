@@ -1,4 +1,4 @@
-# ApiQuest CLI Architecture - @apiquest/fracture
+# ApiQuest CLI - @apiquest/fracture v1.0
 
 ## Overview
 

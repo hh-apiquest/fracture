@@ -188,7 +188,7 @@ Basic structure (see [Collection Schema](../../fracture/quest_schema_spec.md) fo
 
 ## Runtime Options
 
-Configure HTTP-specific options via collection-level [`options`](../../types/src/index.ts:142) or plugin-specific [`options.plugins.http`](../../types/src/index.ts:177):
+Configure HTTP-specific options via collection-level `options` or plugin-specific `options.plugins.http`:
 
 ```json
 {
@@ -276,10 +276,10 @@ See [Authentication Plugins](../plugin-auth/index.md) for details.
 
 ## Cookie Management
 
-The HTTP plugin integrates with Fracture's cookie jar ([`ICookieJar`](../../types/src/index.ts:355)):
+The HTTP plugin integrates with Fracture's cookie jar:
 - Automatically sends relevant cookies with requests (domain/path matching)
 - Stores `Set-Cookie` headers from responses (including error responses)
-- Cookies persist across requests in the same run (unless disabled via [`options.jar.persist`](../../types/src/index.ts:218))
+- Cookies persist across requests in the same run (unless disabled via `options.jar.persist`)
 
 Access cookies in scripts via [`quest.cookies`](../../fracture/api_reference.md#questcookies).
 
@@ -319,7 +319,3 @@ Access cookies in scripts via [`quest.cookies`](../../fracture/api_reference.md#
   ]
 }
 ```
-
-## License
-
-Dual-licensed under AGPLv3.0-or-later and commercial license. See [LICENSE.txt](../LICENSE.txt).

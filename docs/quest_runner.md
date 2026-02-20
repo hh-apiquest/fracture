@@ -1,4 +1,4 @@
-# ApiQuest Runner Architecture - @apiquest/fracture v1.0
+# ApiQuest Runner - @apiquest/fracture v1.0
 
 ## Overview
 

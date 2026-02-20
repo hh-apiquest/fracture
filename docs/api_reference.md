@@ -1,4 +1,4 @@
-# ApiQuest JavaScript API Reference v1.0
+# ApiQuest API Reference v1.0
 
 Complete specification for the `quest` global object available in all scripts.
 
@@ -72,9 +72,9 @@ quest.request.condition         // "quest.variables.get('env') === 'dev'" - JS e
 Protocol plugins extend `quest.request` and QuestAPI with protocol-specific properties and methods.
 
 See plugin documentation for details:
-- [HTTP Plugin](../plugins/plugin-http/index.md) - `quest.request.url`, `quest.request.method`, `quest.request.headers`, `quest.request.body`
-- [GraphQL Plugin](../plugins/plugin-graphql/index.md) - GraphQL-specific properties
-- [SSE Plugin](../plugins/plugin-sse/index.md) - Server-Sent Events properties
+- [HTTP Plugin](./plugins/plugin-http/index.md) - `quest.request.url`, `quest.request.method`, `quest.request.headers`, `quest.request.body`
+- [GraphQL Plugin](./plugins/plugin-graphql/index.md) - GraphQL-specific properties
+- [SSE Plugin](./plugins/plugin-sse/index.md) - Server-Sent Events properties
 
 ---
 
@@ -83,9 +83,9 @@ See plugin documentation for details:
 Protocol plugins extend `quest.response` with protocol-specific properties, methods, and assertion helpers.
 
 See plugin documentation for full API details:
-- [HTTP Plugin](../plugins/plugin-http/index.md) - Status, headers, body, metrics, assertion helpers
-- [GraphQL Plugin](../plugins/plugin-graphql/index.md) - GraphQL-specific response properties
-- [SSE Plugin](../plugins/plugin-sse/index.md) - Server-Sent Events response properties
+- [HTTP Plugin](./plugins/plugin-http/index.md) - Status, headers, body, metrics, assertion helpers
+- [GraphQL Plugin](./plugins/plugin-graphql/index.md) - GraphQL-specific response properties
+- [SSE Plugin](./plugins/plugin-sse/index.md) - Server-Sent Events response properties
 
 ---
 

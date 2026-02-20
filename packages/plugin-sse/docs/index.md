@@ -117,7 +117,3 @@ This enables accurate test count reporting (5 messages × tests per message).
   ]
 }
 ```
-
-## License
-
-Dual-licensed under AGPL-3.0-or-later and commercial license. See [LICENSE.txt](../LICENSE.txt).

@@ -161,4 +161,4 @@ quest.test('All messages valid', () => {
 
 ## License
 
-Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE.txt for details.
+Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE for details.

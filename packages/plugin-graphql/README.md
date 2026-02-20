@@ -126,4 +126,4 @@ quest.test('User data returned', () => {
 
 ## License
 
-Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE.txt for details.
+Dual-licensed under AGPL-3.0-or-later and commercial license. See [LICENSE](LICENSE) for details.

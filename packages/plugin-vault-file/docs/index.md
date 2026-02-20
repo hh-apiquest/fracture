@@ -133,7 +133,3 @@ fracture run collection.json --vault-file /path/to/.vault
   ]
 }
 ```
-
-## License
-
-Dual-licensed under AGPL-3.0-or-later and commercial license. See [LICENSE.txt](../LICENSE.txt).

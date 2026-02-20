@@ -137,4 +137,4 @@ The plugin automatically detects encrypted files by the presence of the `_encryp
 
 ## License
 
-Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE.txt for details.
+Dual-licensed under AGPL-3.0-or-later and commercial license. See LICENSE for details.

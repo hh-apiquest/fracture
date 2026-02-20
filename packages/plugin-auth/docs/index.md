@@ -156,6 +156,3 @@ Authentication is applied by the runner before protocol plugin execution. Config
 - Use `"type": "inherit"` to explicitly inherit
 - Use `"type": "none"` to disable auth for specific request/folder
 
-## License
-
-Dual-licensed under AGPL-3.0-or-later and commercial license. See [LICENSE.txt](../LICENSE.txt).
