@@ -372,66 +372,64 @@ fracture run api-tests.json \
 
 ### Iteration Control
 
-The `--iterations` flag controls how many times requests execute:
+The `--iterations` flag controls how many times the collection runs:
 
 ```bash
-# Limit CLI data to first 10 rows
+# Limit CLI data file to first 10 rows — collection runs 10 times
 fracture run api-tests.json --data users.csv --iterations 10
 
-# Limit collection testData to first 10 rows
+# Limit collection testData to first 10 rows — collection runs 10 times
 fracture run api-tests.json --iterations 10
 
-# Collection repetition (no testData anywhere)
+# No testData, no --data: repeat collection 10 times with no row data
 fracture run api-tests.json --iterations 10
 ```
 
 **How `--iterations` Works:**
 
-1. **With Data (Global Cap):**
-   - Limits ALL testData sources to first N rows
-   - Each folder/request with testData runs min(N, testData.length) iterations
-   
+There is a single flat iteration data source per run — either the CLI `--data` file or the collection-level `testData` array. There is no per-folder or per-request testData driving separate iteration counts.
+
+1. **With data and `--iterations`:**
+   - The active data source (`--data` file or collection `testData`) is sliced to the first N rows.
+   - The collection runs once per resulting row.
+
    ```bash
-   # Collection has:
-   # - Folder A: testData with 100 rows
-   # - Folder B: testData with 30 rows
-   
+   # Collection testData has 50 rows — run only the first 5
    fracture run collection.json --iterations 5
-   
-   # Result:
-   # - Folder A runs 5 times (min(5, 100))
-   # - Folder B runs 5 times (min(5, 30))
-   ```
+   # Result: collection runs 5 times, one row of data per run
 
-2. **Without Data (Repetition Mode):**
-   - Runs entire collection N times
-   - No iteration data available
-   
-   ```bash
-   # No testData in collection
-   fracture run collection.json --iterations 3
-   
-   # Result: Entire collection runs 3 times
-   ```
-
-3. **With CLI Data:**
-   - `--data` overrides ALL testData in collection
-   - `--iterations` limits the data file
-   
-   ```bash
+   # CLI data file has 100 rows — limit to first 10
    fracture run collection.json --data users.csv --iterations 10
-   
-   # Uses first 10 rows from users.csv
-   # All collection testData ignored
+   # Result: collection runs 10 times using first 10 CSV rows
    ```
 
-**Priority:**
+2. **Without data (repetition mode):**
+   - No data is available, so `--iterations` sets how many times the entire collection repeats.
+   - No iteration data is injected into scripts.
+
+   ```bash
+   # No testData in collection, no --data file
+   fracture run collection.json --iterations 3
+   # Result: entire collection runs 3 times with no iteration data
+   ```
+
+3. **Without `--iterations`:**
+   - If data exists: runs once per row (all rows).
+   - If no data: runs once.
+
+**Data source priority:**
 ```
-CLI --data + --iterations  →  Override all, use first N rows
-Collection testData        →  Override folder/request, limit to N
-Folder testData           →  Use in folder only, limit to N
-Request testData          →  Use in request only, limit to N
-No data + --iterations    →  Repeat collection N times
+CLI --data present   →  Replaces collection testData entirely
+Collection testData  →  Used when no CLI --data is provided
+No data anywhere     →  Single run (or N repetitions if --iterations set)
+```
+
+**`--iterations` effect:**
+```
+Data present + --iterations N  →  Use first N rows, run N times
+Data present, no --iterations  →  Use all rows, run data.length times
+No data + --iterations N       →  Repeat collection N times (no row data)
+No data, no --iterations       →  Run collection once
 ```
 
 ### Filtering
