@@ -1,6 +1,6 @@
 {
   "name": "@apiquest/plugin-auth",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Authentication plugins for ApiQuest (Bearer, Basic, OAuth2, API Key)",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,9 @@
     "auth",
     "authentication",
     "bearer",
-    "oauth2"
+    "oauth2",
+    "plugin",
+    "fracture"
   ],
   "author": "ApiQuest Contributors",
   "license": "AGPL-3.0-or-later",

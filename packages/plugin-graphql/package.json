@@ -1,6 +1,6 @@
 {
   "name": "@apiquest/plugin-graphql",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "GraphQL protocol plugin for ApiQuest",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,7 +18,8 @@
   "keywords": [
     "apiquest",
     "graphql",
-    "plugin"
+    "plugin",
+    "fracture"
   ],
   "author": "",
   "license": "AGPL-3.0-or-later",

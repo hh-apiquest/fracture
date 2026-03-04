@@ -1,6 +1,6 @@
 {
   "name": "@apiquest/plugin-sse",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "SSE protocol plugin for ApiQuest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,10 +16,11 @@
     "test": "vitest"
   },
   "keywords": [
-    "api",
-    "http",
-    "quest",
-    "plugin"
+    "apiquest",
+    "sse",
+    "server-sent-events",
+    "plugin",
+    "fracture"
   ],
   "author": "ApiQuest",
   "license": "AGPL-3.0-or-later",

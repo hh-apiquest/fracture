@@ -1,6 +1,6 @@
 {
   "name": "@apiquest/plugin-http",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "HTTP protocol plugin for ApiQuest",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,10 +16,11 @@
     "test": "vitest"
   },
   "keywords": [
+    "apiquest",
     "api",
     "http",
-    "quest",
-    "plugin"
+    "plugin",
+    "fracture"
   ],
   "author": "ApiQuest",
   "license": "AGPL-3.0-or-later",
