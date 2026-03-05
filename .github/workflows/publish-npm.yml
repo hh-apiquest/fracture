@@ -67,31 +67,35 @@ jobs:
       
       - name: Build all packages
         run: yarn build
-      
-      - name: Publish @apiquest/types
-        working-directory: ./packages/types
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/fracture
-        working-directory: ./packages/fracture
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/plugin-http
-        working-directory: ./packages/plugin-http
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/plugin-auth
-        working-directory: ./packages/plugin-auth
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/plugin-vault-file
-        working-directory: ./packages/plugin-vault-file
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/plugin-graphql
-        working-directory: ./packages/plugin-graphql
-        run: npm publish --provenance --access public
-      
-      - name: Publish @apiquest/plugin-sse
-        working-directory: ./packages/plugin-sse
-        run: npm publish --provenance --access public
+
+      - name: Publish packages (skip already-published versions)
+        run: |
+          set -euo pipefail
+
+          publish_if_needed() {
+            local package_dir="$1"
+            local package_name="$2"
+            local package_version
+
+            package_version=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('${package_dir}/package.json','utf8'));process.stdout.write(p.version);")
+
+            echo "Checking ${package_name}@${package_version}"
+
+            if npm view "${package_name}@${package_version}" version >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${package_version} (already exists on npm)"
+            else
+              echo "Publishing ${package_name}@${package_version}"
+              (
+                cd "${package_dir}"
+                npm publish --provenance --access public
+              )
+            fi
+          }
+
+          publish_if_needed "packages/types" "@apiquest/types"
+          publish_if_needed "packages/fracture" "@apiquest/fracture"
+          publish_if_needed "packages/plugin-http" "@apiquest/plugin-http"
+          publish_if_needed "packages/plugin-auth" "@apiquest/plugin-auth"
+          publish_if_needed "packages/plugin-vault-file" "@apiquest/plugin-vault-file"
+          publish_if_needed "packages/plugin-graphql" "@apiquest/plugin-graphql"
+          publish_if_needed "packages/plugin-sse" "@apiquest/plugin-sse"
