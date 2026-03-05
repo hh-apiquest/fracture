@@ -11,7 +11,7 @@
     "directory": "packages/plugin-http"
   },
   "scripts": {
-    "build": "rollup -c && tsc --emitDeclarationOnly",
+    "build": "rollup -c && tsc --emitDeclarationOnly && node --input-type=module -e \"import{copyFileSync}from'node:fs';copyFileSync('src/scriptDeclarations.request.d.ts','dist/scriptDeclarations.request.d.ts');copyFileSync('src/scriptDeclarations.response.d.ts','dist/scriptDeclarations.response.d.ts');\"",
     "dev": "rollup -c --watch",
     "test": "vitest"
   },

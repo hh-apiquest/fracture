@@ -16,7 +16,7 @@
     "directory": "packages/fracture"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node --input-type=module -e \"import{copyFileSync}from'node:fs';copyFileSync('src/scriptDeclarations.d.ts','dist/scriptDeclarations.d.ts');\"",
     "dev": "tsc --watch",
     "test": "vitest"
   },

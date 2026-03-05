@@ -270,7 +270,7 @@ describe('Section 29: Abort and Bail', () => {
             const iter = quest.variables.get('iteration');
             quest.test('Iteration ' + iter, () => {
               // Fail on iteration 2
-              expect(iter).not.to.equal('2');
+              expect(iter).not.to.equal(2);
             });
           `
         }]

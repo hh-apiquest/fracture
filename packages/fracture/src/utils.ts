@@ -1,16 +1,17 @@
-import type { Variable, Auth, CollectionItem } from '@apiquest/types';
+import type { VariableValue, VariablePrimitive, Auth, CollectionItem } from '@apiquest/types';
 
 /**
- * Extract value from string | Variable
+ * Extract value from primitive | Variable object
  * Respects the enabled flag
  */
-export function extractValue(value: string | Variable): string {
-  if (typeof value === 'string') {
+export function extractValue(value: VariableValue): VariablePrimitive {
+  if (typeof value !== 'object' || value === null) {
     return value;
   }
+
   // Check if enabled (default to true if not specified)
   if (value.enabled === false) {
-    return '';
+    return null;
   }
   return value.value;
 }

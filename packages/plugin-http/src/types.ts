@@ -3,6 +3,71 @@
 // ============================================================================
 
 /**
+ * Typed shape of the HTTP protocolAPIProvider return value.
+ * Used by plugin-http/index.ts for the return type of protocolAPIProvider,
+ * and by scriptDeclarations.assert.ts for compile-time enforcement.
+ */
+export interface HttpRequestBodyAPI {
+  get(): string | null;
+  set(content: string): void;
+  readonly mode: string | null;
+}
+
+export interface HttpRequestHeadersAPI {
+  add(header: { key: string; value: string }): void;
+  remove(key: string): void;
+  get(key: string): string | null;
+  upsert(header: { key: string; value: string }): void;
+  toObject(): Record<string, string>;
+}
+
+export interface HttpScriptRequestAPI {
+  url: string;
+  method: string;
+  body: HttpRequestBodyAPI;
+  headers: HttpRequestHeadersAPI;
+}
+
+export interface HttpResponseHeadersAPI {
+  get(name: string): string | string[] | null;
+  has(name: string): boolean;
+  toObject(): Record<string, string | string[]>;
+}
+
+export interface HttpResponseToAPI {
+  be: {
+    ok: boolean;
+    success: boolean;
+    clientError: boolean;
+    serverError: boolean;
+  };
+  have: {
+    status(code: number): boolean;
+    header(name: string): boolean;
+    jsonBody(field: string): boolean;
+  };
+}
+
+export interface HttpScriptResponseAPI {
+  status: number;
+  statusText: string;
+  headers: HttpResponseHeadersAPI;
+  body: string;
+  text(): string;
+  json(): unknown;
+  duration: number;
+  size: number;
+  to: HttpResponseToAPI;
+}
+
+export interface HttpProtocolAPI {
+  request: HttpScriptRequestAPI;
+  response: HttpScriptResponseAPI;
+  [key: string]: unknown;
+}
+
+
+/**
  * HTTP Response Data Structure
  * This is what gets stored in ProtocolResponse.data
  */

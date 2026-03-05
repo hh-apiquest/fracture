@@ -22,10 +22,13 @@
     },
     "variables": {
       "type": "object",
-      "description": "Variable map (key → value or variable object)",
+      "description": "Variable map (key → primitive value or variable object).",
       "additionalProperties": {
         "oneOf": [
           { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" },
           { "$ref": "#/definitions/variable" }
         ]
       }
@@ -105,14 +108,20 @@
       "required": ["value"],
       "properties": {
         "value": {
-          "type": "string"
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" },
+            { "type": "null" }
+          ],
+          "description": "Variable value. Empty string is treated as a valid string value."
         },
         "enabled": {
           "type": "boolean"
         },
         "type": {
           "type": "string",
-          "enum": ["string", "number", "boolean"]
+          "enum": ["string", "number", "boolean", "null"]
         },
         "isSecret": {
           "type": "boolean"

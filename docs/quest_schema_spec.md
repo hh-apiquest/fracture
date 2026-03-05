@@ -40,7 +40,7 @@ interface Collection {
   };
   
   // Variables
-  variables?: Record<string, string | Variable>;
+  variables?: Record<string, string | number | boolean | null | Variable>;
   
   // Collection-level scripts
   collectionPreScript?: string;   // Runs ONCE at collection start
@@ -157,9 +157,9 @@ interface Cookie {
 }
 
 interface Variable {
-  value: string;
+  value: string | number | boolean | null;
   enabled?: boolean;
-  type?: "string" | "number" | "boolean";
+  type?: "string" | "number" | "boolean" | "null";
   isSecret?: boolean;
   isRequired?: boolean;
   provider?: string;     // "env", "vault:aws-secrets", etc.
@@ -318,6 +318,10 @@ Variables support type annotation and secret providers:
 - `string` - Default text value
 - `number` - Numeric value
 - `boolean` - true/false
+- `null` - Explicitly unset value
+
+**Empty String Handling:**
+- `""` is treated as a valid `string` value (not `null`)
 
 **Secret Handling:**
 - `isSecret: true` marks a variable as sensitive (masked in UI)

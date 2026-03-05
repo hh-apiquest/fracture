@@ -1,9 +1,10 @@
-import type { ExecutionContext, TestResult, Cookie, CookieSetOptions } from '@apiquest/types';
+import type { ExecutionContext, TestResult, Cookie, CookieSetOptions, VariablePrimitive } from '@apiquest/types';
 import { ScriptType } from '@apiquest/types';
 import { createQuestTestAPI } from './QuestTestAPI.js';
 import type { CookieJar } from './CookieJar.js';
 import type { SendRequest, SendRequestResponse, HistoryFilterCriteria } from '@apiquest/types';
-import { isNullOrWhitespace } from './utils.js';
+import { isNullOrWhitespace, extractValue } from './utils.js';
+import type { QuestScriptAPI, QuestEventDataAPI } from './QuestScriptTypes.js';
 
 /**
  * Helper: Execute HTTP request and return response object
@@ -131,11 +132,11 @@ export function createQuestAPI(
   scriptType: ScriptType,
   tests: TestResult[], // Array to collect test results
   emitAssertion: (test: TestResult) => void
-): Record<string, unknown> {
+): QuestScriptAPI {
   // Create test API (test, skip, fail) with abort signal
   const testAPI = createQuestTestAPI(tests, scriptType, emitAssertion, context.abortSignal);
 
-  const questApi: Record<string, unknown> = {
+  const questApi: QuestScriptAPI = {
     // Test API
     test: testAPI.test,
     skip: testAPI.skip,
@@ -175,11 +176,11 @@ export function createQuestAPI(
     // Variables API
     variables: (() => {
       const variablesAPI = {
-        get(key: string) {
+        get(key: string): VariablePrimitive {
           // Priority: iteration > scope chain > collection > env => global
           const currentIterationData = context.iterationData?.[context.iterationCurrent - 1];
           if (currentIterationData !== null && currentIterationData !== undefined && key in currentIterationData) {
-            return String(currentIterationData[key]);
+            return currentIterationData[key];
           }
 
           // Search scope chain (current -> parent)
@@ -192,18 +193,18 @@ export function createQuestAPI(
           }
 
           if (key in context.collectionVariables) {
-            return context.collectionVariables[key];
+            return extractValue(context.collectionVariables[key]);
           }
           if (context.environment !== null && context.environment !== undefined && key in context.environment.variables) {
-            return context.environment.variables[key];
+            return extractValue(context.environment.variables[key]);
           }
           if (key in context.globalVariables) {
-            return context.globalVariables[key];
+            return extractValue(context.globalVariables[key]);
           }
           return null;
         },
 
-        set(key: string, value: string) {
+        set(key: string, value: VariablePrimitive) {
           // Search scope chain for existing key, or set in current scope
           let currentScope: typeof context.scope | undefined = context.scope;
           while (currentScope !== undefined) {
@@ -239,10 +240,11 @@ export function createQuestAPI(
     // Global variables
     global: {
       variables: {
-        get(key: string) {
-          return context.globalVariables[key] ?? null;
+        get(key: string): VariablePrimitive {
+          const v = context.globalVariables[key];
+          return v !== undefined ? extractValue(v) : null;
         },
-        set(key: string, value: string) {
+        set(key: string, value: VariablePrimitive) {
           context.globalVariables[key] = value;
         },
         has(key: string) {
@@ -258,8 +260,12 @@ export function createQuestAPI(
         clear() {
           context.globalVariables = {};
         },
-        toObject() {
-          return { ...context.globalVariables };
+        toObject(): Record<string, VariablePrimitive> {
+          const result: Record<string, VariablePrimitive> = {};
+          for (const [k, v] of Object.entries(context.globalVariables)) {
+            result[k] = extractValue(v);
+          }
+          return result;
         }
       }
     },
@@ -286,10 +292,11 @@ export function createQuestAPI(
 
       // Collection variables
       variables: {
-        get(key: string) {
-          return context.collectionVariables[key] ?? null;
+        get(key: string): VariablePrimitive {
+          const v = context.collectionVariables[key];
+          return v !== undefined ? extractValue(v) : null;
         },
-        set(key: string, value: string) {
+        set(key: string, value: VariablePrimitive) {
           context.collectionVariables[key] = value;
         },
         has(key: string) {
@@ -305,8 +312,12 @@ export function createQuestAPI(
         clear() {
           context.collectionVariables = {};
         },
-        toObject() {
-          return { ...context.collectionVariables };
+        toObject(): Record<string, VariablePrimitive> {
+          const result: Record<string, VariablePrimitive> = {};
+          for (const [k, v] of Object.entries(context.collectionVariables)) {
+            result[k] = extractValue(v);
+          }
+          return result;
         }
       }
     },
@@ -315,10 +326,11 @@ export function createQuestAPI(
     environment: {
       name: context.environment?.name ?? null,
       variables: {
-        get(key: string) {
-          return context.environment?.variables[key] ?? null;
+        get(key: string): VariablePrimitive {
+          const v = context.environment?.variables[key];
+          return v !== undefined ? extractValue(v) : null;
         },
-        set(key: string, value: string) {
+        set(key: string, value: VariablePrimitive) {
           context.environment ??= { name: 'Runtime Environment', variables: {} };
           context.environment.variables[key] = value;
         },
@@ -337,8 +349,13 @@ export function createQuestAPI(
             context.environment.variables = {};
           }
         },
-        toObject() {
-          return context.environment !== null && context.environment !== undefined ? { ...context.environment.variables } : {};
+        toObject(): Record<string, VariablePrimitive> {
+          if (context.environment === null || context.environment === undefined) return {};
+          const result: Record<string, VariablePrimitive> = {};
+          for (const [k, v] of Object.entries(context.environment.variables)) {
+            result[k] = extractValue(v);
+          }
+          return result;
         }
       }
     },
@@ -357,7 +374,7 @@ export function createQuestAPI(
           }
           return null;
         },
-        set(key: string, value: string) {
+        set(key: string, value: VariablePrimitive) {
           // Search scope chain for existing key, or set in current scope
           let currentScope: typeof context.scope | undefined = context.scope;
           while (currentScope !== undefined) {
@@ -390,9 +407,9 @@ export function createQuestAPI(
           // Clear current scope only
           context.scope.vars = {};
         },
-        toObject() {
+        toObject(): Record<string, VariablePrimitive> {
           // Merge all scopes (parent to child, so child overrides)
-          const result: Record<string, string> = {};
+          const result: Record<string, VariablePrimitive> = {};
           const chain: typeof context.scope[] = [];
           let currentScope: typeof context.scope | undefined = context.scope;
           while (currentScope !== undefined) {
@@ -589,8 +606,8 @@ export function createQuestAPI(
       timestamp: context.currentEvent.timestamp,
       data: (() => {
         const rawData = context.currentEvent.data as string | Record<string, unknown>;
-        // Add json() helper method
         const dataWithHelper: Record<string, unknown> = typeof rawData === 'string' ? { value: rawData } : rawData;
+        // Add json() helper method
         dataWithHelper.json = function () {
           try {
             return (typeof rawData === 'string' ? JSON.parse(rawData) : rawData) as unknown;
@@ -598,7 +615,7 @@ export function createQuestAPI(
             return null;
           }
         };
-        return dataWithHelper;
+        return dataWithHelper as QuestEventDataAPI;
       })(),
       index: context.currentEvent.index
     } : null,
@@ -660,7 +677,7 @@ export function createQuestAPI(
 
       if (typeof providerRecord.request === 'object' && providerRecord.request !== null) {
         questApi.request = {
-          ...(questApi.request as Record<string, unknown>),
+          ...questApi.request,
           ...(providerRecord.request as Record<string, unknown>)
         };
       }

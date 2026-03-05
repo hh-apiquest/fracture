@@ -24,6 +24,9 @@ quest.collection.variables.clear()                 // Clear all variables
 quest.collection.variables.toObject()              // Get all as object {key: value}
 ```
 
+`quest.collection.variables` values support `string | number | boolean | null`.
+Empty string (`""`) is a valid string value.
+
 ---
 
 ## quest.iteration
@@ -101,6 +104,8 @@ quest.scope.variables.clear()                  // Clear all
 quest.scope.variables.toObject()               // Get all as object
 ```
 
+`quest.scope.variables` values support `string | number | boolean | null`.
+
 **Scope:** Variables persist through script inheritance chain (collection → folder → request), cleared after each request completes
 
 ---
@@ -116,6 +121,8 @@ quest.global.variables.remove('authToken')     // Remove variable
 quest.global.variables.clear()                 // Clear all
 quest.global.variables.toObject()              // Get all as object
 ```
+
+`quest.global.variables` values support `string | number | boolean | null`.
 
 **Scope:** Persists for entire collection run (all iterations, all requests)  
 **Source:** Passed via CLI `--global name=value`
@@ -139,6 +146,8 @@ quest.environment.variables.clear()                // Clear all
 quest.environment.variables.toObject()             // Get all as object
 ```
 
+`quest.environment.variables` values support `string | number | boolean | null`.
+
 **Source:** Environment JSON file passed via CLI `--environment dev.json`
 
 ---
@@ -152,6 +161,9 @@ quest.variables.set('key', 'value')            // Set in local scope
 quest.variables.has('key')                     // Check any scope
 quest.variables.replaceIn('{{baseUrl}}/{{userId}}')  // Replace {{vars}} in string
 ```
+
+`quest.variables.get()` returns `string | number | boolean | null`.
+`quest.variables.set()` accepts `string | number | boolean | null`.
 
 **Resolution Priority (stops at first match):**
 1. `quest.iteration.data` - Current iteration row

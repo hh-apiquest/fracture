@@ -12,7 +12,7 @@ export interface Collection {
   protocol: string;  // "http", "graphql", "grpc", "websocket", etc.
   
   auth?: Auth;
-  variables?: Record<string, string | Variable>;
+  variables?: Record<string, VariableValue>;
   
   // Collection lifecycle scripts
   collectionPreScript?: string;
@@ -111,10 +111,13 @@ export interface Auth {
 // Variables
 // ============================================================================
 
+export type VariablePrimitive = string | number | boolean | null;
+export type VariableValue = VariablePrimitive | Variable;
+
 export interface Variable {
-  value: string;
+  value: VariablePrimitive;
   enabled?: boolean;
-  type?: "string" | "number" | "boolean";
+  type?: "string" | "number" | "boolean" | "null";
   isSecret?: boolean;
   isRequired?: boolean;  // enforce presence at runtime
   provider?: string;     // "env", "vault:aws-secrets", etc., undefined for built-in
@@ -123,7 +126,7 @@ export interface Variable {
 
 export interface Environment {
   name: string;
-  variables: Record<string, string | Variable>;
+  variables: Record<string, VariableValue>;
 }
 
 export interface IterationData {
@@ -299,7 +302,7 @@ export interface PluginEvent {
 export interface ScopeContext {
   level: 'collection' | 'folder' | 'request';
   id: string;
-  vars: Record<string, string>;
+  vars: Record<string, VariablePrimitive>;
   parent?: ScopeContext;
 }
 
@@ -311,8 +314,8 @@ export interface ExecutionContext {
   protocol: string;  // Collection protocol (e.g., 'http', 'graphql')
   
   // Variable scopes
-  collectionVariables: Record<string, string | Variable>;
-  globalVariables: Record<string, string | Variable>;
+  collectionVariables: Record<string, VariableValue>;
+  globalVariables: Record<string, VariableValue>;
   scope: ScopeContext;  // Hierarchical scope chain (parent-linked)
   environment?: Environment;
   
@@ -415,7 +418,7 @@ export interface ILogger {
 export interface RunOptions extends Omit<RuntimeOptions, 'logLevel'> {
   // Additional CLI/API specific options not in RuntimeOptions
   environment?: Environment;
-  globalVariables?: Record<string, string | Variable>;
+  globalVariables?: Record<string, VariableValue>;
   data?: IterationData[];      // CLI --data override
   iterations?: number;          // Global iteration cap
   filter?: string;              // Path-based regex filter

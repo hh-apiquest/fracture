@@ -2,10 +2,10 @@ import got, { OptionsOfTextResponseBody, Response, RequestError } from 'got';
 import FormData from 'form-data';
 import type { IProtocolPlugin, Request, ExecutionContext, ProtocolResponse, ValidationResult, ValidationError, RuntimeOptions, ILogger } from '@apiquest/types';
 import { HttpProxyAgent, HttpsProxyAgent } from 'hpagent';
-import type { HttpBodyData } from './types.js';
+import type { HttpBodyData, HttpProtocolAPI } from './types.js';
 
 // Export types for external consumption
-export type { HttpResponseData, HttpBodyMode, HttpBodyKV, HttpBodyData, HttpRequestData } from './types.js';
+export type { HttpResponseData, HttpBodyMode, HttpBodyKV, HttpBodyData, HttpRequestData, HttpProtocolAPI, HttpScriptRequestAPI, HttpScriptResponseAPI } from './types.js';
 
 // Helper functions for string validation
 function isNullOrEmpty(value: string | null | undefined): boolean {
@@ -80,7 +80,7 @@ export const httpPlugin: IProtocolPlugin = {
   // Accept additional auth plugins beyond the listed types
   strictAuthList: false,
 
-  protocolAPIProvider(context: ExecutionContext) {
+  protocolAPIProvider(context: ExecutionContext): HttpProtocolAPI {
     const data = (context.currentResponse?.data ?? {}) as {
       status?: number;
       statusText?: string;
