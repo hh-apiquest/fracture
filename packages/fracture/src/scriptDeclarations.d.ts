@@ -130,6 +130,28 @@ declare interface QuestCookies {
   toObject(): Record<string, string>;
 }
 
+declare interface QuestConsole {
+  log(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  info(...args: unknown[]): void;
+}
+
+declare interface QuestMomentInstance {
+  format(formatString?: string): string;
+  toISOString(): string;
+  toDate(): Date;
+  valueOf(): number;
+  isValid(): boolean;
+}
+
+declare interface QuestMomentStatic {
+  (input?: unknown): QuestMomentInstance;
+  utc(input?: unknown): QuestMomentInstance;
+  unix(timestamp: number): QuestMomentInstance;
+  isMoment(value: unknown): boolean;
+}
+
 declare const quest: {
   test(name: string, fn: () => void | Promise<void>): void;
   skip(name: string, fn: () => void | Promise<void>): void;
@@ -224,7 +246,8 @@ declare interface ChaiAssertion {
 }
 
 declare const expect: ChaiExpect;
+declare const console: QuestConsole;
 declare const signal: AbortSignal;
 declare function require(module: 'chai'): unknown;
 declare function require(module: 'lodash'): unknown;
-declare function require(module: 'moment'): unknown;
+declare function require(module: 'moment'): QuestMomentStatic;

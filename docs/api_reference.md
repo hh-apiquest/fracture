@@ -599,10 +599,10 @@ quest.event  // null (not available in collection/folder/request scripts)
 User script output.
 
 ```javascript
-console.log(message: string): void
-console.error(message: string): void
-console.warn(message: string): void
-console.info(message: string): void
+console.log(...args: unknown[]): void
+console.error(...args: unknown[]): void
+console.warn(...args: unknown[]): void
+console.info(...args: unknown[]): void
 ```
 
 Output captured and displayed in results. Separate from runner logging controlled by `logLevel`.
