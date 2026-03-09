@@ -31,7 +31,7 @@ describe('Section 26: CLI Options', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 
@@ -111,7 +111,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Parses logLevel: error correctly', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.ERROR });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.ERROR, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getSimpleCollection());
@@ -119,7 +119,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Parses logLevel: warn correctly', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.WARN });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.WARN, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getSimpleCollection());
@@ -127,7 +127,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Parses logLevel: info correctly (default)', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.INFO });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.INFO, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getSimpleCollection());
@@ -135,7 +135,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Parses logLevel: debug correctly', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.DEBUG });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.DEBUG, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getSimpleCollection());
@@ -143,7 +143,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Parses logLevel: trace correctly', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.TRACE });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.TRACE, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getSimpleCollection());
@@ -167,7 +167,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('Defaults to INFO when not specified', () => {
-      const runner = new CollectionRunner();
+      const runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       // Default log level is INFO (2) - not directly testable without exposing logger
       // This test validates the constructor accepts no logLevel parameter
       expect(runner).toBeDefined();
@@ -196,7 +196,7 @@ describe('Section 26: CLI Options', () => {
       };
 
       // Constructor sets DEBUG
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.DEBUG });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.DEBUG, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(collectionWithLogLevel);
@@ -205,7 +205,7 @@ describe('Section 26: CLI Options', () => {
     });
 
     test('RunOptions does not override constructor log level', async () => {
-      const runner = new CollectionRunner({ logLevel: LogLevelEnum.ERROR });
+      const runner = new CollectionRunner({ logLevel: LogLevelEnum.ERROR, plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       
       const result = await runner.run(getCollection());

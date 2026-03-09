@@ -4,12 +4,13 @@ import { Logger } from './Logger.js';
 export interface ResolvedPlugin {
   name: string;
   version: string;
-  type: 'protocol' | 'auth' | 'value';
+  type: 'protocol' | 'auth' | 'value' | 'reporter';
   path: string;
   entryPoint: string;
   protocols?: string[];
   authTypes?: string[];
   valueTypes?: string[];
+  reportTypes?: string[];
 }
 
 export class PluginResolver {
@@ -56,8 +57,10 @@ export class PluginResolver {
     const entries = await readdir(pluginsDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      // Only process plugin-* directories
-      if (!entry.isDirectory() || !entry.name.startsWith('plugin-')) {
+      // Accept plugin-* directories (first-party style) and apiquest-plugin-* (community unscoped style)
+      const isPluginDir = entry.isDirectory() &&
+        (entry.name.startsWith('plugin-') || entry.name.startsWith('apiquest-plugin-'));
+      if (!isPluginDir) {
         continue;
       }
 
@@ -90,7 +93,7 @@ export class PluginResolver {
 
       // Extract metadata from package.json
       const type = pkg.apiquest.type;
-      if (!['protocol', 'auth', 'value'].includes(type)) {
+      if (!['protocol', 'auth', 'value', 'reporter'].includes(type)) {
         this.logger.warn(`Unknown plugin type: ${type} (${pkg.name})`);
         return;
       }
@@ -106,12 +109,13 @@ export class PluginResolver {
       const resolved: ResolvedPlugin = {
         name: pkg.name,
         version: pkg.version,
-        type: type as 'protocol' | 'auth' | 'value',
+        type: type as 'protocol' | 'auth' | 'value' | 'reporter',
         path: pluginPath,
         entryPoint: fullEntryPath,
         protocols: provides.protocols,
         authTypes: provides.authTypes,
         valueTypes: provides.valueTypes,
+        reportTypes: provides.reportTypes,
       };
 
       // Check for version conflicts

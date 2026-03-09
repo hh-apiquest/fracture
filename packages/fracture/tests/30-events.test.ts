@@ -43,7 +43,7 @@ describe('Section 30: Event System', () => {
   };
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockProtocolPlugin);
     eventLog = [];
 

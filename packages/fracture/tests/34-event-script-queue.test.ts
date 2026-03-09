@@ -13,7 +13,7 @@ describe('Section 34: Plugin Event Scripts Queue', () => {
   let runner: CollectionRunner;
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockStreamingPlugin);
   });
 

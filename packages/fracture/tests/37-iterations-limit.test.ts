@@ -22,7 +22,7 @@ describe('Section 37: Iterations Limit (--iterations)', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

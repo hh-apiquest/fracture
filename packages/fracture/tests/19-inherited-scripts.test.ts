@@ -24,7 +24,7 @@ describe('Section 19: Inherited Script Execution (Section 17.8)', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

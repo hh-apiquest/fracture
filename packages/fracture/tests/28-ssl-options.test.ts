@@ -10,7 +10,7 @@ describe('Section 28: SSL/TLS Options', () => {
   let runner: CollectionRunner;
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

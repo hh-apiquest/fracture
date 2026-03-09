@@ -1,11 +1,18 @@
 /**
- * Test Plan Section 22: Dynamic Plugin Loading
- * Tests CollectionRunner dynamic plugin loading from a directory
+ * Test Plan Section 22: Plugin Loading
+ * Tests CollectionRunner plugin loading via 'resolved' metadata and 'modules' instances
+ *
+ * Architecture note:
+ * - PluginResolver.scanDirectories() is a separate utility — scanning is a caller concern
+ * - CollectionRunner accepts plugins via:
+ *   - mode: 'resolved' — pre-scanned ResolvedPlugin[] list
+ *   - mode: 'modules' — live IProtocolPlugin / IAuthPlugin / IValueProviderPlugin instances
  */
 
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { CollectionRunner } from '../src/CollectionRunner.js';
-import type { Collection, EventPayloads, IProtocolPlugin, Request, RuntimeOptions } from '@apiquest/types';
+import { PluginResolver } from '../src/PluginResolver.js';
+import type { Collection, IProtocolPlugin, Request, RuntimeOptions } from '@apiquest/types';
 import { LogLevel } from '@apiquest/types';
 import { mkdir, writeFile, rm, mkdtemp } from 'fs/promises';
 import path from 'path';
@@ -13,1060 +20,535 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { isNullOrEmpty } from '../src/utils.js';
 
-const addConsoleListener = (runner: CollectionRunner, logMessages: string[]): void => {
-  (runner as unknown as { on: (event: string, handler: (payload: EventPayloads['console']) => void) => void })
-    .on('console', collectConsoleMessage(logMessages));
-};
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const waitForPluginResolution = async (runner: CollectionRunner): Promise<void> => {
-  await (runner as unknown as { pluginResolutionPromise: Promise<unknown[]> }).pluginResolutionPromise;
-};
+/**
+ * Create a minimal IProtocolPlugin for use in tests
+ */
+function makeProtocolPlugin(protocol: string, body = 'Test plugin works'): IProtocolPlugin {
+  return {
+    name: `Test Plugin (${protocol})`,
+    version: '1.0.0',
+    description: 'Minimal plugin for tests',
+    protocols: [protocol],
+    supportedAuthTypes: [],
+    dataSchema: {},
+    protocolAPIProvider(context) {
+      const data = (context.currentResponse?.data ?? {}) as {
+        status?: number;
+        statusText?: string;
+        headers?: Record<string, string>;
+        body?: string;
+      };
+      return {
+        request: {
+          url: (context.currentRequest?.data.url ?? '') as string,
+          method: (context.currentRequest?.data.method ?? '') as string,
+          headers: {
+            toObject() { return (context.currentRequest?.data.headers ?? {}) as Record<string, string>; }
+          }
+        },
+        response: {
+          status: data.status ?? 0,
+          statusText: data.statusText ?? '',
+          headers: {
+            toObject() { return data.headers ?? {}; }
+          },
+          body: data.body ?? ''
+        }
+      };
+    },
+    validate(_request: Request, _options: RuntimeOptions) { return { valid: true }; },
+    async execute() {
+      return {
+        data: { status: 200, statusText: 'OK', headers: {}, body },
+        summary: { outcome: 'success' as const, code: 200, label: 'OK', duration: 0 }
+      };
+    }
+  };
+}
 
-const collectConsoleMessage = (logMessages: string[]) => (event: EventPayloads['console']): void => {
-  logMessages.push(event.message);
-};
-
-describe('Section 22: Dynamic Plugin Loading', () => {
+describe('Section 22: Plugin Loading', () => {
   let testPluginsDir: string;
   const testPluginsDirPrefix = path.join(__dirname, 'test-plugins-temp-');
-  
+
   beforeEach(async () => {
     testPluginsDir = await mkdtemp(testPluginsDirPrefix);
   });
 
   afterEach(async () => {
-    if (isNullOrEmpty(testPluginsDir)) {
-      return;
-    }
-
+    if (isNullOrEmpty(testPluginsDir)) return;
     try {
       await rm(testPluginsDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch {
       // Ignore cleanup errors
     }
   });
 
   // ========================================================================
-  // Section 22.1: Plugin directory scanning
+  // Section 22.1: Modules mode — live plugin instances
   // ========================================================================
 
-  describe('22.1 Plugin directory scanning', () => {
-    test('Runner handles non-existent plugins directory gracefully', async () => {
-      const logMessages: string[] = [];
-      const runner = new CollectionRunner({ 
-        pluginsDir: '/nonexistent/path',
-        logLevel: LogLevel.DEBUG
+  describe('22.1 Modules mode: live plugin instances', () => {
+    test('Runs collection with protocol plugin provided as module', async () => {
+      const plugin = makeProtocolPlugin('test', 'Module mode works');
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'modules', protocol: [plugin] }
       });
 
-      addConsoleListener(runner, logMessages);
-      
-      await waitForPluginResolution(runner);
-      
-      expect(logMessages.some(msg => msg.includes('Plugins directory does not exist'))).toBe(true);
+      const collection: Collection = {
+        info: { id: 'test', name: 'Test' },
+        protocol: 'test',
+        items: [{ type: 'request', id: 'req-1', name: 'R1', data: { url: 'test://x' } }]
+      };
+
+      const result = await runner.run(collection);
+
+      expect(result.requestResults).toHaveLength(1);
+      expect(result.requestResults[0].success).toBe(true);
+      expect((result.requestResults[0].response?.data as { body?: string }).body).toBe('Module mode works');
     });
 
-    test('Runner scans plugins directory on construction', async () => {
-      const logMessages: string[] = [];
-      await mkdir(testPluginsDir, { recursive: true });
-      
-      const runner = new CollectionRunner({ 
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
+    test('Runs collection with empty modules list — fails on missing plugin', async () => {
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'modules' }
       });
-      addConsoleListener(runner, logMessages);
 
-      await waitForPluginResolution(runner);
-      
-      expect(logMessages.some(msg => msg.includes('Scanning plugins'))).toBe(true);
+      const collection: Collection = {
+        info: { id: 'test', name: 'Test' },
+        protocol: 'http',
+        items: [{ type: 'request', id: 'req-1', name: 'R1', data: { url: 'http://x' } }]
+      };
+
+      await expect(runner.run(collection)).rejects.toThrow("No plugin registered for protocol 'http'");
     });
 
-    test('Runner ignores non-plugin directories', async () => {
-      const logMessages: string[] = [];
-      await mkdir(testPluginsDir, { recursive: true });
-      await mkdir(path.join(testPluginsDir, 'not-a-plugin'), { recursive: true });
-      await mkdir(path.join(testPluginsDir, 'also-not-plugin'), { recursive: true });
-      
-      const runner = new CollectionRunner({ 
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+    test('Multiple protocol plugins — each served by its own instance', async () => {
+      const httpPlugin = makeProtocolPlugin('http', 'HTTP response');
+      const grpcPlugin = makeProtocolPlugin('grpc', 'GRPC response');
 
-      await waitForPluginResolution(runner);
-      
-      // Should scan but not find any plugins
-      expect(logMessages.some(msg => msg.includes('Scanning plugins'))).toBe(true);
-      expect(logMessages.some(msg => msg.includes('Loading:'))).toBe(false);
+      const runner = new CollectionRunner({
+        plugins: { mode: 'modules', protocol: [httpPlugin, grpcPlugin] }
+      });
+
+      const httpResult = await runner.run({
+        info: { id: 'c1', name: 'C1' },
+        protocol: 'http',
+        items: [{ type: 'request', id: 'r1', name: 'R1', data: { url: 'http://x' } }]
+      });
+      expect((httpResult.requestResults[0].response?.data as { body?: string }).body).toBe('HTTP response');
+
+      const grpcResult = await runner.run({
+        info: { id: 'c2', name: 'C2' },
+        protocol: 'grpc',
+        items: [{ type: 'request', id: 'r2', name: 'R2', data: { url: 'grpc://x' } }]
+      });
+      expect((grpcResult.requestResults[0].response?.data as { body?: string }).body).toBe('GRPC response');
     });
   });
 
   // ========================================================================
-  // Section 22.2: Plugin loading and registration
+  // Section 22.2: Resolved mode — pre-scanned metadata
   // ========================================================================
 
-  describe('22.2 Plugin loading and registration', () => {
-    test('Loads fracture protocol plugin from directory', async () => {
-      const logMessages: string[] = [];
-      
+  describe('22.2 Resolved mode: pre-scanned metadata via PluginResolver', () => {
+    test('Loads fracture protocol plugin from resolved metadata', async () => {
       // Create test plugin directory structure
       const pluginDir = path.join(testPluginsDir, 'plugin-test-protocol');
       const distDir = path.join(pluginDir, 'dist');
       await mkdir(distDir, { recursive: true });
-      
-      // Create package.json with fracture runtime
-      const packageJson = {
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
         name: '@apiquest/plugin-test-protocol',
+        version: '1.0.0',
         main: 'dist/index.js',
         apiquest: {
           type: 'protocol',
           runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['test']
-            }
-          }
+          capabilities: { provides: { protocols: ['test'] } }
         }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      // Create plugin module
-      const pluginCode = `
+      }, null, 2));
+
+      await writeFile(path.join(distDir, 'index.js'), `
         export default {
-          name: 'Test Plugin',
-          version: '1.0.0',
-          description: 'Test plugin for dynamic loading',
-          protocols: ['test'],
-          supportedAuthTypes: [],
-          dataSchema: {},
-          protocolAPIProvider(context) {
-            return {
-              request: {
-                url: context.currentRequest?.data?.url ?? '',
-                method: context.currentRequest?.data?.method ?? '',
-                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
-              },
-              response: {
-                status: context.currentResponse?.data?.status ?? 0,
-                statusText: context.currentResponse?.data?.statusText ?? '',
-                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
-                body: context.currentResponse?.data?.body ?? ''
-              }
-            };
-          },
-          validate(request) {
-            return { valid: true };
-          },
-          async execute(request, context) {
-            return {
-              data: { status: 200, statusText: 'OK', headers: {}, body: 'Test plugin works' },
-              summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 }
-            };
+          name: 'Test Plugin', version: '1.0.0', description: 'Test',
+          protocols: ['test'], supportedAuthTypes: [], dataSchema: {},
+          protocolAPIProvider() { return { request: {}, response: {} }; },
+          validate() { return { valid: true }; },
+          async execute() {
+            return { data: { status: 200, statusText: 'OK', headers: {}, body: 'Resolved mode works' },
+                     summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 } };
           }
         };
-      `;
-      await writeFile(path.join(distDir, 'index.js'), pluginCode);
-      
-      const runner = new CollectionRunner({ 
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+      `);
 
-      await waitForPluginResolution(runner);
-      
-      // Run collection to trigger plugin loading
+      // Scan once externally — caller concern
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+      expect(resolved).toHaveLength(1);
+
+      // Pass resolved list to runner — no second scan
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'resolved', resolved }
+      });
+
       const collection: Collection = {
         info: { id: 'test', name: 'Test' },
         protocol: 'test',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request',
-            data: { url: 'test://example' }
-          }
-        ]
+        items: [{ type: 'request', id: 'req-1', name: 'R1', data: { url: 'test://x' } }]
       };
-      
+
       const result = await runner.run(collection);
-      
-      // Verify plugin was loaded and registered
-      expect(logMessages.some(msg => msg.includes('Loading @apiquest/plugin-test-protocol'))).toBe(true);
-      expect(logMessages.some(msg => msg.includes('Registered protocol plugin: test'))).toBe(true);
-      
-      // Verify plugin works
+
       expect(result.requestResults).toHaveLength(1);
       expect(result.requestResults[0].success).toBe(true);
-      expect((result.requestResults[0].response?.data as { body?: string } | undefined)?.body).toBe('Test plugin works');
+      expect((result.requestResults[0].response?.data as { body?: string }).body).toBe('Resolved mode works');
     });
 
-    test('Skips plugins without fracture runtime', async () => {
-      const logMessages: string[] = [];
-      
-      // Create plugin directory
+    test('Skips plugins without fracture runtime during scanning', async () => {
       const pluginDir = path.join(testPluginsDir, 'plugin-desktop-only');
-      const distDir = path.join(pluginDir, 'dist');
-      await mkdir(distDir, { recursive: true });
-      
-      // Create package.json with desktop runtime only
-      const packageJson = {
+      await mkdir(pluginDir, { recursive: true });
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
         name: '@apiquest/plugin-desktop-only',
         main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['desktop'] // Not fracture!
-        }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const runner = new CollectionRunner({ 
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+        apiquest: { type: 'protocol', runtime: ['desktop'] }
+      }, null, 2));
 
-      await waitForPluginResolution(runner);
-      
-      expect(logMessages.some(msg => msg.includes('Skipping @apiquest/plugin-desktop-only'))).toBe(true);
-      expect(logMessages.some(msg => msg.includes('Loading: @apiquest/plugin-desktop-only'))).toBe(false);
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      // Desktop-only plugin should not be resolved
+      expect(resolved).toHaveLength(0);
     });
 
-    test('Loads auth plugin from directory', async () => {
-      const logMessages: string[] = [];
-      
-      // Create test auth plugin
+    test('Loads auth plugin from resolved metadata', async () => {
       const pluginDir = path.join(testPluginsDir, 'plugin-test-auth');
       const distDir = path.join(pluginDir, 'dist');
       await mkdir(distDir, { recursive: true });
-      
-      const packageJson = {
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
         name: '@apiquest/plugin-test-auth',
+        version: '1.0.0',
         main: 'dist/index.js',
         apiquest: {
           type: 'auth',
           runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              authTypes: ['testauth']
-            }
-          }
+          capabilities: { provides: { authTypes: ['testauth'] } }
         }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      // Create auth plugin that exports an array
-      const pluginCode = `
+      }, null, 2));
+
+      await writeFile(path.join(distDir, 'index.js'), `
         export default [
           {
-            authTypes: ['testauth'],
-            async apply(request, authConfig, context) {
-              request.headers = request.headers || {};
-              request.headers['X-Test-Auth'] = 'test-token';
-              return request;
-            }
+            name: 'Test Auth', version: '1.0.0', description: 'Test',
+            authTypes: ['testauth'], protocols: ['http'], dataSchema: {},
+            validate() { return { valid: true }; },
+            async apply(request) { return request; }
           }
         ];
-      `;
-      await writeFile(path.join(distDir, 'index.js'), pluginCode);
-      
-      const runner = new CollectionRunner({ 
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+      `);
 
-      await waitForPluginResolution(runner);
-      
-      // Create minimal protocol plugin for testing auth
-      const minimalProtocolPlugin: IProtocolPlugin = {
-        name: 'Minimal HTTP',
-        version: '1.0.0',
-        description: 'Minimal protocol for auth testing',
-        protocols: ['http'],
-        supportedAuthTypes: ['testauth'],
-        protocolAPIProvider(context) {
-          return {
-            request: {
-              url: (context.currentRequest?.data.url ?? '') as string,
-              method: (context.currentRequest?.data.method ?? '') as string,
-              headers: {
-                toObject() {
-                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
-                }
-              }
-            },
-            response: {
-              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
-              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
-              headers: {
-                toObject() {
-                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
-                }
-              },
-              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
-            }
-          };
-        },
-        dataSchema: {},
-        validate() { return { valid: true }; },
-        async execute() {
-          return {
-            data: {
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              body: ''
-            },
-            summary: {
-              outcome: 'success' as const,
-              code: 200,
-              label: 'OK',
-              duration: 0
-            }
-          };
-        }
-      };
-      runner.registerPlugin(minimalProtocolPlugin);
-      
-      // Run collection with testauth to trigger loading
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+      expect(resolved.some(r => r.name === '@apiquest/plugin-test-auth')).toBe(true);
+
+      const httpPlugin = makeProtocolPlugin('http');
+      // http already supports all auth types with strictAuthList=false default
+      (httpPlugin as { supportedAuthTypes: string[] }).supportedAuthTypes = ['testauth'];
+
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'resolved', resolved }
+      });
+      // Pre-register protocol plugin directly since it's not in resolved list
+      runner.registerPlugin(httpPlugin);
+
       const collection: Collection = {
         info: { id: 'test', name: 'Test' },
         protocol: 'http',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request',
-            auth: { type: 'testauth', data: {} },
-            data: {
-              url: 'http://example.com'
-            }
-          }
-        ]
+        items: [{
+          type: 'request', id: 'req-1', name: 'R1',
+          auth: { type: 'testauth', data: {} },
+          data: { url: 'http://example.com' }
+        }]
       };
-      
-      await runner.run(collection);
-      
-      expect(logMessages.some(msg => msg.includes('Loading @apiquest/plugin-test-auth'))).toBe(true);
-      expect(logMessages.some(msg => msg.includes('Registered auth plugin: testauth'))).toBe(true);
-    });
-  });
 
-  // ========================================================================
-  // Section 22.3: Error handling
-  // ========================================================================
-
-  describe('22.3 Error handling', () => {
-    test('Continues loading other plugins if one fails', async () => {
-      const logMessages: string[] = [];
-      
-      // Create bad plugin (valid metadata, but invalid module that fails on import)
-      const badPluginDir = path.join(testPluginsDir, 'plugin-bad');
-      const badDistDir = path.join(badPluginDir, 'dist');
-      await mkdir(badDistDir, { recursive: true });
-      
-      const badPackageJson = {
-        name: '@apiquest/plugin-bad',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['bad']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(badPluginDir, 'package.json'),
-        JSON.stringify(badPackageJson, null, 2)
-      );
-      
-      // Invalid JavaScript that will fail on import
-      const badPluginCode = `
-        throw new Error('Plugin loading failed!');
-      `;
-      await writeFile(path.join(badDistDir, 'index.js'), badPluginCode);
-      
-      // Create good plugin
-      const goodPluginDir = path.join(testPluginsDir, 'plugin-good');
-      const distDir = path.join(goodPluginDir, 'dist');
-      await mkdir(distDir, { recursive: true });
-      
-      const packageJson = {
-        name: '@apiquest/plugin-good',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['good']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(goodPluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const pluginCode = `
-        export default {
-          name: 'Good Plugin',
-          version: '1.0.0',
-          description: 'Test good plugin',
-          protocols: ['good'],
-          supportedAuthTypes: [],
-          dataSchema: {},
-          protocolAPIProvider(context) {
-            return {
-              request: {
-                url: context.currentRequest?.data?.url ?? '',
-                method: context.currentRequest?.data?.method ?? '',
-                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
-              },
-              response: {
-                status: context.currentResponse?.data?.status ?? 0,
-                statusText: context.currentResponse?.data?.statusText ?? '',
-                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
-                body: context.currentResponse?.data?.body ?? ''
-              }
-            };
-          },
-          validate(request) {
-            return { valid: true };
-          },
-          async execute() {
-            return { data: { status: 200, statusText: 'OK', headers: {}, body: '' }, summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 } };
-          }
-        };
-      `;
-      await writeFile(path.join(distDir, 'index.js'), pluginCode);
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
-
-      await waitForPluginResolution(runner);
-      
-      // First: try collection with 'bad' protocol
-      const badCollection: Collection = {
-        info: { id: 'test', name: 'Test Bad' },
-        protocol: 'bad',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request with Bad Protocol',
-            data: { url: 'bad://example' }
-          }
-        ]
-      };
-      
-      // Should fail because bad plugin can't load
-      await expect(runner.run(badCollection)).rejects.toThrow();
-      
-      // Should have logged error for bad plugin
-      expect(logMessages.some(msg => msg.includes('Failed') && msg.includes('@apiquest/plugin-bad'))).toBe(true);
-      
-      // Second: run collection with 'good' protocol
-      const goodCollection: Collection = {
-        info: { id: 'test', name: 'Test Good' },
-        protocol: 'good',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request with Good Protocol',
-            data: { url: 'good://example' }
-          }
-        ]
-      };
-      
-      // Good plugin should still load and work
-      const result = await runner.run(goodCollection);
-      expect(result.requestResults[0].success).toBe(true);
-    });
-
-    test('Handles missing or corrupted entrypoint file', async () => {
-      const logMessages: string[] = [];
-      
-      // Create plugin with missing entrypoint
-      const missingPluginDir = path.join(testPluginsDir, 'plugin-missing');
-      await mkdir(missingPluginDir, { recursive: true });
-      
-      const missingPackageJson = {
-        name: '@apiquest/plugin-missing',
-        main: 'dist/index.js', // File won't exist
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['missing']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(missingPluginDir, 'package.json'),
-        JSON.stringify(missingPackageJson, null, 2)
-      );
-      // Don't create dist/index.js - it's missing!
-      
-      // Create plugin with corrupted (non-JS) entrypoint
-      const corruptedPluginDir = path.join(testPluginsDir, 'plugin-corrupted');
-      const corruptedDistDir = path.join(corruptedPluginDir, 'dist');
-      await mkdir(corruptedDistDir, { recursive: true });
-      
-      const corruptedPackageJson = {
-        name: '@apiquest/plugin-corrupted',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['corrupted']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(corruptedPluginDir, 'package.json'),
-        JSON.stringify(corruptedPackageJson, null, 2)
-      );
-      
-      // Write corrupted file (not valid JavaScript)
-      await writeFile(
-        path.join(corruptedDistDir, 'index.js'),
-        'this is not valid { javascript syntax @#$%'
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
-
-      await waitForPluginResolution(runner);
-      
-      // Try to run collection requiring the corrupted plugin
-      const collection: Collection = {
-        info: { id: 'test', name: 'Test' },
-        protocol: 'corrupted',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request',
-            data: { url: 'corrupted://example' }
-          }
-        ]
-      };
-      
-      // Should fail during plugin loading
-      await expect(runner.run(collection)).rejects.toThrow();
-      
-      // Should log import error
-      expect(logMessages.some(msg =>
-        msg.includes('Failed') && msg.includes('@apiquest/plugin-corrupted')
-      )).toBe(true);
-    });
-  });
-
-  // ========================================================================
-  // Section 22.4: Static vs Dynamic loading compatibility
-  // ========================================================================
-
-  describe('22.4 Static vs Dynamic loading compatibility', () => {
-    test('Allows static plugin registration without pluginsDir', async () => {
-      // Create a simple test plugin
-      const testPlugin: IProtocolPlugin = {
-        name: 'Static Test Plugin',
-        version: '1.0.0',
-        description: 'Test static plugin',
-        protocols: ['static-test'],
-        supportedAuthTypes: [],
-        protocolAPIProvider(context) {
-          return {
-            request: {
-              url: (context.currentRequest?.data.url ?? '') as string,
-              method: (context.currentRequest?.data.method ?? '') as string,
-              headers: {
-                toObject() {
-                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
-                }
-              }
-            },
-            response: {
-              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
-              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
-              headers: {
-                toObject() {
-                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
-                }
-              },
-              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
-            }
-          };
-        },
-        dataSchema: {},
-        validate(_request: Request, _options: RuntimeOptions) {
-          return { valid: true };
-        },
-        async execute(request: Request, context, options, emitEvent, logger) {
-          return {
-            data: {
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              body: 'Static plugin works'
-            },
-            summary: {
-              outcome: 'success',
-              code: 200,
-              label: 'OK',
-              duration: 0
-            }
-          };
-        }
-      };
-      
-      // Create runner without pluginsDir
-      const runner = new CollectionRunner();
-      runner.registerPlugin(testPlugin);
-      
-      const collection: Collection = {
-        info: { id: 'test', name: 'Test' },
-        protocol: 'static-test',
-        items: [
-          {
-            type: 'request',
-            id: 'req-1',
-            name: 'Test Request',
-            data: { url: 'test://example' }
-          }
-        ]
-      };
-      
       const result = await runner.run(collection);
-      
-      expect(result.requestResults).toHaveLength(1);
       expect(result.requestResults[0].success).toBe(true);
-      expect(result.requestResults[0].response?.data !== undefined && result.requestResults[0].response?.data !== null && (result.requestResults[0].response?.data as { body?: string }).body).toBe('Static plugin works');
-    });
-
-    test('Combines static and dynamic plugins', async () => {
-      const consoleSpy = vi.spyOn(console, 'debug');
-      
-      // Create static plugin
-      const staticPlugin: IProtocolPlugin = {
-        name: 'Static Plugin',
-        version: '1.0.0',
-        description: 'Static plugin',
-        protocols: ['static'],
-        supportedAuthTypes: [],
-        protocolAPIProvider(context) {
-          return {
-            request: {
-              url: (context.currentRequest?.data.url ?? '') as string,
-              method: (context.currentRequest?.data.method ?? '') as string,
-              headers: {
-                toObject() {
-                  return (context.currentRequest?.data.headers ?? {}) as Record<string, string>;
-                }
-              }
-            },
-            response: {
-              status: (context.currentResponse?.data as { status?: number } | undefined)?.status ?? 0,
-              statusText: (context.currentResponse?.data as { statusText?: string } | undefined)?.statusText ?? '',
-              headers: {
-                toObject() {
-                  return ((context.currentResponse?.data as { headers?: Record<string, string | string[]> } | undefined)?.headers) ?? {};
-                }
-              },
-              body: (context.currentResponse?.data as { body?: string } | undefined)?.body ?? ''
-            }
-          };
-        },
-        dataSchema: {},
-        validate(_request: Request, _options: RuntimeOptions) {
-          return { valid: true };
-        },
-        async execute(request: Request, context, options, emitEvent, logger) {
-          return {
-            data: {
-              status: 200,
-              statusText: 'OK',
-              headers: {},
-              body: 'Static'
-            },
-            summary: {
-              outcome: 'success',
-              code: 200,
-              label: 'OK',
-              duration: 0
-            }
-          };
-        }
-      };
-      
-      // Create dynamic plugin in directory
-      const pluginDir = path.join(testPluginsDir, 'plugin-dynamic');
-      const distDir = path.join(pluginDir, 'dist');
-      await mkdir(distDir, { recursive: true });
-      
-      const packageJson = {
-        name: '@apiquest/plugin-dynamic',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['dynamic']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const pluginCode = `
-        export default {
-          name: 'Dynamic Plugin',
-          version: '1.0.0',
-          description: 'Dynamic plugin',
-          protocols: ['dynamic'],
-          supportedAuthTypes: [],
-          dataSchema: {},
-          protocolAPIProvider(context) {
-            return {
-              request: {
-                url: context.currentRequest?.data?.url ?? '',
-                method: context.currentRequest?.data?.method ?? '',
-                headers: { toObject() { return context.currentRequest?.data?.headers ?? {}; } }
-              },
-              response: {
-                status: context.currentResponse?.data?.status ?? 0,
-                statusText: context.currentResponse?.data?.statusText ?? '',
-                headers: { toObject() { return context.currentResponse?.data?.headers ?? {}; } },
-                body: context.currentResponse?.data?.body ?? ''
-              }
-            };
-          },
-          validate(request) {
-            return { valid: true };
-          },
-          async execute() {
-            return {
-              data: { status: 200, statusText: 'OK', headers: {}, body: 'Dynamic' },
-              summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 }
-            };
-          }
-        };
-      `;
-      await writeFile(path.join(distDir, 'index.js'), pluginCode);
-      
-      // Create runner with both
-      const runner = new CollectionRunner({ pluginsDir: testPluginsDir });
-      runner.registerPlugin(staticPlugin);
-
-      await waitForPluginResolution(runner);
-      
-      // Test static plugin
-      const staticCollection: Collection = {
-        info: { id: 'test', name: 'Test' },
-        protocol: 'static',
-        items: [{
-          type: 'request',
-          id: 'req-1',
-          name: 'Test',
-          data: { url: 'test://example' }
-        }]
-      };
-      
-      const staticResult = await runner.run(staticCollection);
-      expect(staticResult.requestResults[0].response?.data !== undefined && staticResult.requestResults[0].response?.data !== null && (staticResult.requestResults[0].response?.data as { body?: string }).body).toBe('Static');
-      
-      // Test dynamic plugin
-      const dynamicCollection: Collection = {
-        info: { id: 'test', name: 'Test' },
-        protocol: 'dynamic',
-        items: [{
-          type: 'request',
-          id: 'req-1',
-          name: 'Test',
-          data: { url: 'test://example' }
-        }]
-      };
-      
-      const dynamicResult = await runner.run(dynamicCollection);
-      expect(dynamicResult.requestResults[0].response?.data !== undefined && dynamicResult.requestResults[0].response?.data !== null && (dynamicResult.requestResults[0].response?.data as { body?: string }).body).toBe('Dynamic');
-      
-      consoleSpy.mockRestore();
     });
   });
 
   // ========================================================================
-  // Section 22.5: PluginResolver unit tests
+  // Section 22.3: PluginResolver unit tests
   // ========================================================================
 
-  describe('22.5 PluginResolver unit tests', () => {
+  describe('22.3 PluginResolver unit tests', () => {
+    test('Handles non-existent directory gracefully', async () => {
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories(['/nonexistent/path']);
+      expect(resolved).toHaveLength(0);
+    });
+
+    test('Scans empty directory and returns empty list', async () => {
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+      expect(resolved).toHaveLength(0);
+    });
+
+    test('Ignores non-plugin directories', async () => {
+      await mkdir(path.join(testPluginsDir, 'not-a-plugin'), { recursive: true });
+      await mkdir(path.join(testPluginsDir, 'also-not-plugin'), { recursive: true });
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+      expect(resolved).toHaveLength(0);
+    });
+
     test('Resolves plugin with valid capabilities metadata', async () => {
-      const logMessages: string[] = [];
-      
-      // Create plugin with all capabilities
       const pluginDir = path.join(testPluginsDir, 'plugin-full');
       await mkdir(pluginDir, { recursive: true });
-      
-      const packageJson = {
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
         name: '@apiquest/plugin-full',
         version: '1.2.3',
         main: 'dist/index.js',
         apiquest: {
           type: 'protocol',
           runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['custom', 'custom2']
-            }
-          }
+          capabilities: { provides: { protocols: ['custom', 'custom2'] } }
         }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+      }, null, 2));
 
-      await waitForPluginResolution(runner);
-      
-      // Should log proper version and type
-      expect(logMessages.some(msg =>
-        msg.includes('Resolved @apiquest/plugin-full v1.2.3 (protocol)')
-      )).toBe(true);
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0].name).toBe('@apiquest/plugin-full');
+      expect(resolved[0].version).toBe('1.2.3');
+      expect(resolved[0].protocols).toEqual(['custom', 'custom2']);
     });
 
-    test('Handles version conflicts - newer version wins', async () => {
-      const logMessages: string[] = [];
-      
-      // Create two versions of same plugin
+    test('Handles version conflicts — newer version wins', async () => {
       const pluginV1Dir = path.join(testPluginsDir, 'plugin-versioned-v1');
       const pluginV2Dir = path.join(testPluginsDir, 'plugin-versioned-v2');
       await mkdir(pluginV1Dir, { recursive: true });
       await mkdir(pluginV2Dir, { recursive: true });
-      
-      const packageJsonV1 = {
-        name: '@apiquest/plugin-versioned',
-        version: '1.0.0',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['versioned']
-            }
-          }
-        }
-      };
-      
-      const packageJsonV2 = {
-        name: '@apiquest/plugin-versioned',
-        version: '2.0.0',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['versioned']
-            }
-          }
-        }
-      };
-      
-      await writeFile(
-        path.join(pluginV1Dir, 'package.json'),
-        JSON.stringify(packageJsonV1, null, 2)
-      );
-      await writeFile(
-        path.join(pluginV2Dir, 'package.json'),
-        JSON.stringify(packageJsonV2, null, 2)
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
 
-      await waitForPluginResolution(runner);
-      
-      // Should upgrade to v2.0.0
-      expect(logMessages.some(msg =>
-        msg.includes('Upgrading @apiquest/plugin-versioned from v1.0.0 to v2.0.0') ||
-        msg.includes('Skipping @apiquest/plugin-versioned v1.0.0')
-      )).toBe(true);
+      await writeFile(path.join(pluginV1Dir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-versioned', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['versioned'] } } }
+      }, null, 2));
+
+      await writeFile(path.join(pluginV2Dir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-versioned', version: '2.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['versioned'] } } }
+      }, null, 2));
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      // Only one entry, it should be the newest version
+      const versioned = resolved.filter(r => r.name === '@apiquest/plugin-versioned');
+      expect(versioned).toHaveLength(1);
+      expect(versioned[0].version).toBe('2.0.0');
     });
 
-    test('Handles invalid package.json during resolution', async () => {
-      const logMessages: string[] = [];
-      
-      // Create plugin with invalid JSON
-      const badPluginDir = path.join(testPluginsDir, 'plugin-bad-json');
-      await mkdir(badPluginDir, { recursive: true });
-      await writeFile(
-        path.join(badPluginDir, 'package.json'),
-        '{ invalid json syntax'
-      );
-      
-      // Create valid plugin too
-      const goodPluginDir = path.join(testPluginsDir, 'plugin-good-json');
-      await mkdir(goodPluginDir, { recursive: true });
-      const goodPackageJson = {
-        name: '@apiquest/plugin-good-json',
-        version: '1.0.0',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'protocol',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              protocols: ['good']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(goodPluginDir, 'package.json'),
-        JSON.stringify(goodPackageJson, null, 2)
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
+    test('Handles invalid package.json during resolution — skips bad, continues good', async () => {
+      // Bad JSON plugin
+      const badDir = path.join(testPluginsDir, 'plugin-bad-json');
+      await mkdir(badDir, { recursive: true });
+      await writeFile(path.join(badDir, 'package.json'), '{ invalid json syntax');
 
-      await waitForPluginResolution(runner);
-      
-      // Should log error for bad plugin but continue
-      expect(logMessages.some(msg =>
-        msg.includes('Failed to resolve') && msg.includes('plugin-bad-json')
-      )).toBe(true);
-      
-      // Should still resolve good plugin
-      expect(logMessages.some(msg =>
-        msg.includes('Resolved @apiquest/plugin-good-json')
-      )).toBe(true);
+      // Valid plugin
+      const goodDir = path.join(testPluginsDir, 'plugin-good-json');
+      await mkdir(goodDir, { recursive: true });
+      await writeFile(path.join(goodDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-good-json', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['good'] } } }
+      }, null, 2));
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      // Only good plugin should be resolved
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0].name).toBe('@apiquest/plugin-good-json');
     });
 
     test('Resolves auth plugin with authTypes in capabilities', async () => {
-      const logMessages: string[] = [];
-      
-      // Create auth plugin with capabilities
       const pluginDir = path.join(testPluginsDir, 'plugin-bearer-auth');
       await mkdir(pluginDir, { recursive: true });
-      
-      const packageJson = {
-        name: '@apiquest/plugin-bearer-auth',
-        version: '1.0.0',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'auth',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              authTypes: ['bearer', 'token']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
 
-      await waitForPluginResolution(runner);
-      
-      // Should resolve as auth type
-      expect(logMessages.some(msg =>
-        msg.includes('Resolved @apiquest/plugin-bearer-auth v1.0.0 (auth)')
-      )).toBe(true);
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-bearer-auth', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'auth', runtime: ['fracture'], capabilities: { provides: { authTypes: ['bearer', 'token'] } } }
+      }, null, 2));
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0].type).toBe('auth');
+      expect(resolved[0].authTypes).toEqual(['bearer', 'token']);
     });
 
     test('Resolves value provider plugin', async () => {
-      const logMessages: string[] = [];
-      
-      // Create value provider plugin
       const pluginDir = path.join(testPluginsDir, 'plugin-vault-custom');
       await mkdir(pluginDir, { recursive: true });
-      
-      const packageJson = {
-        name: '@apiquest/plugin-vault-custom',
-        version: '1.0.0',
-        main: 'dist/index.js',
-        apiquest: {
-          type: 'value',
-          runtime: ['fracture'],
-          capabilities: {
-            provides: {
-              valueTypes: ['vault:custom']
-            }
-          }
-        }
-      };
-      await writeFile(
-        path.join(pluginDir, 'package.json'),
-        JSON.stringify(packageJson, null, 2)
-      );
-      
-      const runner = new CollectionRunner({
-        pluginsDir: testPluginsDir,
-        logLevel: LogLevel.DEBUG
-      });
-      addConsoleListener(runner, logMessages);
 
-      await waitForPluginResolution(runner);
-      
-      // Should resolve as value type
-      expect(logMessages.some(msg =>
-        msg.includes('Resolved @apiquest/plugin-vault-custom v1.0.0 (value)')
-      )).toBe(true);
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-vault-custom', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'value', runtime: ['fracture'], capabilities: { provides: { valueTypes: ['vault:custom'] } } }
+      }, null, 2));
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      expect(resolved).toHaveLength(1);
+      expect(resolved[0].type).toBe('value');
+      expect(resolved[0].valueTypes).toEqual(['vault:custom']);
+    });
+  });
+
+  // ========================================================================
+  // Section 22.4: Error handling during plugin loading
+  // ========================================================================
+
+  describe('22.4 Error handling during plugin loading', () => {
+    test('Fails to run when required plugin throws during import', async () => {
+      const pluginDir = path.join(testPluginsDir, 'plugin-bad');
+      const distDir = path.join(pluginDir, 'dist');
+      await mkdir(distDir, { recursive: true });
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-bad', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['bad'] } } }
+      }, null, 2));
+
+      await writeFile(path.join(distDir, 'index.js'), `throw new Error('Plugin loading failed!');`);
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'resolved', resolved }
+      });
+
+      const collection: Collection = {
+        info: { id: 'test', name: 'Test' },
+        protocol: 'bad',
+        items: [{ type: 'request', id: 'req-1', name: 'R1', data: { url: 'bad://x' } }]
+      };
+
+      await expect(runner.run(collection)).rejects.toThrow();
+    });
+
+    test('Handles missing entrypoint file', async () => {
+      const pluginDir = path.join(testPluginsDir, 'plugin-missing');
+      await mkdir(pluginDir, { recursive: true });
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-missing', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['missing'] } } }
+      }, null, 2));
+      // Note: dist/index.js is NOT created
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      const runner = new CollectionRunner({
+        logLevel: LogLevel.DEBUG,
+        plugins: { mode: 'resolved', resolved }
+      });
+
+      const collection: Collection = {
+        info: { id: 'test', name: 'Test' },
+        protocol: 'missing',
+        items: [{ type: 'request', id: 'req-1', name: 'R1', data: { url: 'missing://x' } }]
+      };
+
+      await expect(runner.run(collection)).rejects.toThrow();
+    });
+  });
+
+  // ========================================================================
+  // Section 22.5: Mixed registration — modules + registerPlugin()
+  // ========================================================================
+
+  describe('22.5 Mixed registration', () => {
+    test('Registers additional plugin via registerPlugin() after construction', async () => {
+      const basePlugin = makeProtocolPlugin('base', 'Base plugin');
+      const extraPlugin = makeProtocolPlugin('extra', 'Extra plugin');
+
+      const runner = new CollectionRunner({
+        plugins: { mode: 'modules', protocol: [basePlugin] }
+      });
+      runner.registerPlugin(extraPlugin);
+
+      const extraResult = await runner.run({
+        info: { id: 'test', name: 'Test' },
+        protocol: 'extra',
+        items: [{ type: 'request', id: 'r1', name: 'R1', data: { url: 'extra://x' } }]
+      });
+
+      expect((extraResult.requestResults[0].response?.data as { body?: string }).body).toBe('Extra plugin');
+    });
+
+    test('Resolved mode: registers additional plugin via registerPlugin() before run()', async () => {
+      // Create a plugin in directory for resolved mode
+      const pluginDir = path.join(testPluginsDir, 'plugin-dynamic');
+      const distDir = path.join(pluginDir, 'dist');
+      await mkdir(distDir, { recursive: true });
+
+      await writeFile(path.join(pluginDir, 'package.json'), JSON.stringify({
+        name: '@apiquest/plugin-dynamic', version: '1.0.0', main: 'dist/index.js',
+        apiquest: { type: 'protocol', runtime: ['fracture'], capabilities: { provides: { protocols: ['dynamic'] } } }
+      }, null, 2));
+
+      await writeFile(path.join(distDir, 'index.js'), `
+        export default {
+          name: 'Dynamic Plugin', version: '1.0.0', description: 'Dynamic',
+          protocols: ['dynamic'], supportedAuthTypes: [], dataSchema: {},
+          protocolAPIProvider() { return { request: {}, response: {} }; },
+          validate() { return { valid: true }; },
+          async execute() {
+            return { data: { status: 200, statusText: 'OK', headers: {}, body: 'Dynamic' },
+                     summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 } };
+          }
+        };
+      `);
+
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories([testPluginsDir]);
+
+      const staticPlugin = makeProtocolPlugin('static', 'Static');
+
+      const runner = new CollectionRunner({
+        plugins: { mode: 'resolved', resolved }
+      });
+      runner.registerPlugin(staticPlugin);
+
+      // Test static plugin (registered explicitly)
+      const staticResult = await runner.run({
+        info: { id: 'c1', name: 'C1' },
+        protocol: 'static',
+        items: [{ type: 'request', id: 'r1', name: 'R1', data: { url: 'static://x' } }]
+      });
+      expect((staticResult.requestResults[0].response?.data as { body?: string }).body).toBe('Static');
+
+      // Test dynamic plugin (loaded from resolved)
+      const dynamicResult = await runner.run({
+        info: { id: 'c2', name: 'C2' },
+        protocol: 'dynamic',
+        items: [{ type: 'request', id: 'r2', name: 'R2', data: { url: 'dynamic://x' } }]
+      });
+      expect((dynamicResult.requestResults[0].response?.data as { body?: string }).body).toBe('Dynamic');
     });
   });
 });
-
-

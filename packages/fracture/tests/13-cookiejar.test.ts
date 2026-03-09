@@ -223,7 +223,7 @@ describe('Section 13: CookieJar', () => {
 
             baseUrl = await server.start();
 
-            runner = new CollectionRunner();
+            runner = new CollectionRunner({ plugins: { mode: 'modules' } });
             runner.registerPlugin(mockOptionsPlugin);
         });
 

@@ -3,8 +3,15 @@
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { CollectionRunner } from '../CollectionRunner.js';
-import { ConsoleReporter } from '../ConsoleReporter.js';
-import type { Collection, Environment, IterationData, RuntimeOptions, EventPayloads, ValidationResult } from '@apiquest/types';
+import {
+  ReporterManager,
+  parseReporterNames,
+  parseReporterExports,
+  parseReporterOptions
+} from '../reporters/ReporterManager.js';
+import { loadReporterPlugins } from '../reporters/ReporterPluginLoader.js';
+import { PluginResolver } from '../PluginResolver.js';
+import type { Collection, Environment, IterationData, RuntimeOptions } from '@apiquest/types';
 import { LogLevel } from '@apiquest/types';
 import { getPluginDirectories } from './plugin-discovery.js';
 import { addPluginCommands } from './plugin-commands.js';
@@ -38,9 +45,13 @@ interface CLIOptions {
   cookieJarPersist?: boolean;
   silent?: boolean;
   color?: boolean;
-  strictMode?:boolean;
-  reporters?: string;
-  out?: string;
+  strictMode?: boolean;
+  /** Comma-separated or repeatable reporter names, e.g. 'cli,json' */
+  reporters?: string | string[];
+  /** Repeatable --reporter-export name=target */
+  reporterExport?: string[];
+  /** Repeatable --reporter-opt name.key=value */
+  reporterOpt?: string[];
   pluginsDir?: string[];
   installPlugins?: boolean;
   allowExternalLibraries?: boolean;
@@ -139,10 +150,11 @@ program
   .option('--cookie-jar', 'Enable persistent cookie jar')
   .option('--cookie-jar-persist', 'Persist cookies across runs')
   // Output & Reporting
-  .option('-r, --reporters <types>', 'Output reporters (comma-separated)', 'cli')
-  .option('-o, --out <directory>', 'Output directory for reports')
-  .option('--no-color', 'Disable colored output')
-  .option('--silent', 'Suppress console output')
+  .option('-r, --reporters <types...>', 'Reporter names: cli, json, junit, html, or a plugin reporter name (repeatable or comma-separated, default: cli)')
+  .option('--reporter-export <name=target>', 'Export target for a reporter: stdout, stderr, or a file path (repeatable)', collectArray, [] as string[])
+  .option('--reporter-opt <name.key=value>', 'Pass an option to a specific reporter (repeatable)', collectArray, [] as string[])
+  .option('--no-color', 'Disable colored output (alias for --reporter-opt cli.color=false)')
+  .option('--silent', 'Suppress all reporter output')
   .option('--log-level <level>', 'Log level: error, warn, info, debug, trace (default: info)')
   // Validation & Testing
   .option('--no-strict-mode', 'Disable strict validation mode')
@@ -258,59 +270,51 @@ program
         logLevel = levelMap[options.logLevel];
       }
       
-      // Create runner with plugin auto-discovery and log level
-      const runner = new CollectionRunner({ 
-        pluginsDir: pluginDirs,
+      // Parse reporter configuration from CLI options
+      const rawReporterOpt = options.reporters;
+      const reporterNames: string[] = rawReporterOpt !== undefined
+        ? (Array.isArray(rawReporterOpt)
+            ? parseReporterNames(rawReporterOpt)
+            : parseReporterNames(rawReporterOpt.split(',')))
+        : ['cli'];
+
+      const reporterExports = parseReporterExports(options.reporterExport ?? []);
+      const reporterOpts = parseReporterOptions(options.reporterOpt ?? []);
+
+      // Single scan — same resolved list used for reporter plugins AND runner plugin loading
+      const resolver = new PluginResolver();
+      const resolved = await resolver.scanDirectories(pluginDirs);
+
+      // Load reporter plugins from the same resolved list
+      const pluginReporters = await loadReporterPlugins(resolved, reporterNames);
+
+      // Build and validate ReporterManager
+      const reporterMgr = ReporterManager.create({
+        reporters: reporterNames,
+        exports: reporterExports,
+        reporterOptions: reporterOpts,
+        silent: options.silent,
+        noColor: options.color === false,  // --no-color sets color to false
+        logLevel,
+        pluginReporters
+      });
+
+      const validationErrors = reporterMgr.validate();
+      if (validationErrors.length > 0) {
+        for (const ve of validationErrors) {
+          console.error(`Reporter '${ve.reporter}': ${ve.error}`);
+        }
+        process.exit(2);
+      }
+
+      // Create runner — pass the already-resolved list; no second scan
+      const runner = new CollectionRunner({
+        plugins: { mode: 'resolved', resolved },
         logLevel
       });
 
-      // Set up console reporter
-      const silent = options.silent;
-      const color = options.color;  // --no-color sets this to false
-      
-      if (silent !== true) {
-        const reporter = new ConsoleReporter({
-          logLevel,
-          color,
-          runner
-        });
-        
-        // Wire up reporter to runner events
-        runner.on('beforeRun', (payload: EventPayloads['beforeRun']) => {
-          reporter.onRunStarted(collection, payload.options as Record<string, unknown>);
-          
-          // Show expected test count if available
-          if (payload.expectedTestCount !== undefined && payload.expectedTestCount >= 0) {
-            console.log(`Expected tests: ${payload.expectedTestCount}`);
-            console.log('');
-          }
-          
-          // Show validation errors if any (shouldn't reach here but defensive)
-          if (payload.validationResult?.valid === false && payload.validationResult.errors !== undefined) {
-            console.error('\nValidation errors detected:');
-            for (const error of payload.validationResult.errors) {
-              console.error(`  ${error.location}: ${error.message}`);
-            }
-            console.error('');
-          }
-        });
-        
-        runner.on('beforeRequest', (payload: EventPayloads['beforeRequest']) => {
-          reporter.onBeforeRequest?.(payload);
-        });
-        
-        runner.on('afterRequest', (payload: EventPayloads['afterRequest']) => {
-          reporter.onAfterRequest?.(payload);
-        });
-        
-        runner.on('assertion', (payload: EventPayloads['assertion']) => {
-          reporter.onAssertion?.(payload);
-        });
-        
-        runner.on('afterRun', (payload: EventPayloads['afterRun']) => {
-          reporter.onRunCompleted(payload.result);
-        });
-      }
+      // Wire all reporters to runner events
+      reporterMgr.attach(runner, collection);
 
       // Build RuntimeOptions from CLI options
       const runOptions: Record<string, unknown> = {
@@ -386,9 +390,12 @@ program
       // Run collection
       const result = await runner.run(collection, runOptions);
 
+      // Flush all reporters (write files, finalize output)
+      await reporterMgr.flush();
+
       // Check for validation errors (pre-run validation failed)
       if (result.validationErrors !== undefined && result.validationErrors.length > 0) {
-        if (silent !== true) {
+        if (options.silent !== true) {
           console.error('\nPre-run validation failed:\n');
           for (const error of result.validationErrors) {
             console.error(`  ${error.location}: ${error.message}`);

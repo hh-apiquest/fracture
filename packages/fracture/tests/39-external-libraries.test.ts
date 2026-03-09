@@ -20,7 +20,7 @@ describe('Section 39: External Libraries', () => {
   const testTempDirPrefix = path.join(__dirname, 'test-libs-temp-');
   
   beforeEach(async () => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
     testTempDir = await mkdtemp(testTempDirPrefix);
   });

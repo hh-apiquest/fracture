@@ -10,7 +10,7 @@ describe('Section 29: Abort and Bail', () => {
   let runner: CollectionRunner;
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

@@ -46,9 +46,8 @@ fracture run ./collection.json \
   --data ./users.csv \
   --iterations 10
 
-# Parallel execution
+# Parallel execution (requires collection allowParallel: true)
 fracture run ./collection.json \
-  --parallel \
   --concurrency 5
 
 # With external libraries (npm, file, or CDN)
@@ -60,14 +59,36 @@ fracture run ./collection.json \
 
 ```typescript
 import { CollectionRunner } from '@apiquest/fracture';
+import { httpPlugin } from '@apiquest/plugin-http';
+import { authPlugins } from '@apiquest/plugin-auth';
 import type { Collection } from '@apiquest/types';
 
-const runner = new CollectionRunner();
+const runner = new CollectionRunner({
+  plugins: {
+    mode: 'modules',
+    protocol: [httpPlugin],
+    auth: authPlugins
+  }
+});
+
 const result = await runner.run(collection, {
   globalVariables: { baseUrl: 'https://api.example.com' }
 });
 
 console.log(`Tests: ${result.passedTests}/${result.totalTests} passed`);
+```
+
+To use plugins discovered from installed directories instead of hardcoded imports:
+
+```typescript
+import { CollectionRunner, PluginResolver, getPluginDirectories } from '@apiquest/fracture';
+
+const resolver = new PluginResolver();
+const resolved = await resolver.scanDirectories(getPluginDirectories());
+
+const runner = new CollectionRunner({
+  plugins: { mode: 'resolved', resolved }
+});
 ```
 
 ## Key Features
@@ -125,8 +146,7 @@ Key runtime options (see [full CLI reference](../../docs/quest_cli.md) for all o
 --env-var <key=value>         Set environment variable
 
 # Execution
---parallel                    Enable parallel execution
---concurrency <number>        Max concurrent requests
+--concurrency <number>        Max concurrent requests (parallel requires collection allowParallel: true)
 --bail                        Stop on first test failure
 --delay <ms>                  Delay between requests
 --timeout <ms>                Request timeout

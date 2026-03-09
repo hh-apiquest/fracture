@@ -24,7 +24,7 @@ describe('Section 19.2: Variable Scoping & Isolation', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 
