@@ -24,7 +24,7 @@ describe('Section 18: CollectionRunner Integration', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

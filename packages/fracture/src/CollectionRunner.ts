@@ -12,19 +12,22 @@ import type {
   TestResult,
   ScriptResult,
   CollectionRunnerOptions,
+  PluginSourceModules,
+  PluginSourceResolved,
   ScopeContext,
   Folder,
   EventEnvelope,
   CollectionInfo,
   Cookie,
   IProtocolPlugin,
-  IAuthPlugin
+  IAuthPlugin,
+  IValueProviderPlugin
 } from '@apiquest/types';
 import { ScriptType, LogLevel } from '@apiquest/types';
 import { VariableResolver } from './VariableResolver.js';
 import { PluginManager } from './PluginManager.js';
 import { PluginLoader } from './PluginLoader.js';
-import { PluginResolver, type ResolvedPlugin } from './PluginResolver.js';
+import type { ResolvedPlugin } from './PluginResolver.js';
 import { CollectionAnalyzer } from './CollectionAnalyzer.js';
 import { CollectionValidator } from './CollectionValidator.js';
 import { TestCounter } from './TestCounter.js';
@@ -41,15 +44,16 @@ import { LibraryLoader } from './LibraryLoader.js';
 export class CollectionRunner extends EventEmitter {
   private variableResolver: VariableResolver;
   private pluginManager: PluginManager;
-  private pluginResolver: PluginResolver;
   private pluginLoader: PluginLoader;
   private collectionAnalyzer: CollectionAnalyzer;
   private collectionValidator: CollectionValidator;
   private testCounter: TestCounter;
   private scriptEngine: ScriptEngine;
   private scriptQueue = Promise.resolve();
-  private pluginResolutionPromise: Promise<ResolvedPlugin[]>;
+  /** Resolved plugin metadata for 'resolved' mode. Empty when using 'modules' mode. */
   private resolvedPlugins: ResolvedPlugin[] = [];
+  /** Whether plugins were provided as live instances (modules mode) — skip loadRequiredPlugins in run() */
+  private pluginsFromModules = false;
   private logger: Logger;
   private abortController?: AbortController;
   private ownsController = false;
@@ -60,33 +64,41 @@ export class CollectionRunner extends EventEmitter {
   private loadedLibraries: Map<string, unknown> = new Map();
   private folderScopeById: Map<string, ScopeContext> = new Map();
 
-  constructor(options?: CollectionRunnerOptions) {
+  constructor(options: CollectionRunnerOptions) {
     super();
-    const logLevel = options?.logLevel ?? LogLevel.INFO;
+    const logLevel = options.logLevel ?? LogLevel.INFO;
     
     this.logger = new Logger('CollectionRunner', logLevel, this);
 
     this.variableResolver = new VariableResolver(this.logger);
     this.pluginManager = new PluginManager(this.logger);
-    this.pluginResolver = new PluginResolver(this.logger);
     this.pluginLoader = new PluginLoader(this.pluginManager, this.logger);
     this.collectionAnalyzer = new CollectionAnalyzer(this.logger);
     this.collectionValidator = new CollectionValidator(this.pluginManager, this.logger);
     this.testCounter = new TestCounter(this.pluginManager, this.logger);
     this.scriptEngine = new ScriptEngine(this.logger);
     this.libraryLoader = new LibraryLoader(this.logger);
-    
-    // Phase 1: Resolve plugins if directories provided (fast - just scans, no loading)
-    if (options?.pluginsDir !== undefined) {
-      const dirs = Array.isArray(options.pluginsDir)
-        ? options.pluginsDir
-        : [options.pluginsDir];
-      
-      // Start plugin resolution (but don't block constructor)
-      this.pluginResolutionPromise = this.pluginResolver.scanDirectories(dirs);
+
+    const pluginSource: PluginSourceModules | PluginSourceResolved = options.plugins;
+
+    if (pluginSource.mode === 'modules') {
+      // Register live instances immediately — no file I/O
+      for (const plugin of pluginSource.protocol ?? []) {
+        this.pluginManager.registerPlugin(plugin);
+      }
+      for (const authPlugin of pluginSource.auth ?? []) {
+        this.pluginManager.registerAuthPlugin(authPlugin);
+      }
+      for (const valuePlugin of pluginSource.value ?? []) {
+        this.pluginManager.registerVariableProvider(valuePlugin);
+      }
+      this.pluginsFromModules = true;
+      this.logger.debug('Plugin provisioning: modules mode — instances registered immediately');
     } else {
-      // No plugins to resolve
-      this.pluginResolutionPromise = Promise.resolve([]);
+      // resolved mode: store pre-resolved metadata list; loading happens in run() on demand
+      // ResolvedPluginInfo (types pkg) and ResolvedPlugin (fracture internal) share identical fields
+      this.resolvedPlugins = pluginSource.resolved as unknown as ResolvedPlugin[];
+      this.logger.debug(`Plugin provisioning: resolved mode — ${this.resolvedPlugins.length} plugins available`);
     }
   }
 
@@ -222,17 +234,21 @@ export class CollectionRunner extends EventEmitter {
   async run(collection: Collection, options: RunOptions = {}): Promise<RunResult> {
     const startTime = new Date();
 
-    // Phase 1: Wait for plugin resolution
-    this.resolvedPlugins = await this.pluginResolutionPromise;
-    this.logger.debug(`Plugin resolution complete: ${this.resolvedPlugins.length} plugins available`);
+    if (!this.pluginsFromModules) {
+      // Analyze collection to determine which plugins from the resolved list are needed
+      const requirements = this.collectionAnalyzer.analyzeRequirements(collection);
+      this.logger.debug(`Collection requires: protocols=[${Array.from(requirements.protocols)}], auth=[${Array.from(requirements.authTypes)}], providers=[${Array.from(requirements.valueProviders)}]`);
 
-    // Analyze collection to determine required plugins
-    const requirements = this.collectionAnalyzer.analyzeRequirements(collection);
-    this.logger.debug(`Collection requires: protocols=[${Array.from(requirements.protocols)}], auth=[${Array.from(requirements.authTypes)}], providers=[${Array.from(requirements.valueProviders)}]`);
-
-    // Phase 2: Load ONLY required plugins
-    await this.pluginLoader.loadRequiredPlugins(this.resolvedPlugins, requirements);
-    this.logger.debug('Required plugins loaded');
+      // Load ONLY required plugins from resolved metadata list
+      if (this.resolvedPlugins.length > 0) {
+        await this.pluginLoader.loadRequiredPlugins(this.resolvedPlugins, requirements);
+        this.logger.debug('Required plugins loaded');
+      } else {
+        this.logger.debug('No resolved plugins provided — skipping plugin loading');
+      }
+    } else {
+      this.logger.debug('Plugins already registered from modules — skipping plugin loading');
+    }
 
     this.logger.debug(`Starting collection: ${collection.info.name}`);
     this.logger.debug(`Collection ID: ${collection.info.id}, Protocol: ${collection.protocol}`);

@@ -576,7 +576,7 @@ describe('Section 21: Auth Provider Plugin Integration', () => {
       const { CollectionRunner } = await import('../src/CollectionRunner.js');
       const { mockOptionsPlugin } = await import('./test-helpers.js');
       
-      const runner = new CollectionRunner();
+      const runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       runner.registerAuthPlugin(mockAuthPlugin);
 
@@ -633,7 +633,7 @@ describe('Section 21: Auth Provider Plugin Integration', () => {
       const { CollectionRunner } = await import('../src/CollectionRunner.js');
       const { mockOptionsPlugin } = await import('./test-helpers.js');
       
-      const runner = new CollectionRunner();
+      const runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       runner.registerAuthPlugin(mockAuthPlugin);
 
@@ -724,7 +724,7 @@ describe('Section 21: Auth Provider Plugin Integration', () => {
       const { CollectionRunner } = await import('../src/CollectionRunner.js');
       const { mockOptionsPlugin } = await import('./test-helpers.js');
       
-      const runner = new CollectionRunner();
+      const runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockOptionsPlugin);
       runner.registerAuthPlugin(mockAuthPlugin);
 

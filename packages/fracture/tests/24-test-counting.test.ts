@@ -23,7 +23,7 @@ describe('Section 24: Deterministic Test Counting', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
     
     // Capture expected test count from beforeRun event

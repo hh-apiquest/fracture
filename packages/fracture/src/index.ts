@@ -3,22 +3,11 @@ export * from './CollectionRunner.js';
 export * from './VariableResolver.js';
 export * from './ScriptEngine.js';
 export * from './PluginManager.js';
-export * from './ConsoleReporter.js';
+export * from './AuthNegotiator.js';
 
-// Convenience function for quick runs
-import { CollectionRunner } from './CollectionRunner.js';
-import type { Collection, RunOptions, RunResult } from '@apiquest/types';
+// Plugin discovery utilities — exported for library embedders and desktop app integration
+export { PluginResolver, type ResolvedPlugin } from './PluginResolver.js';
+export { getPluginDirectories } from './cli/plugin-discovery.js';
 
-export async function run(options: {
-  collection: Collection;
-  environment?: RunOptions['environment'];
-  data?: RunOptions['data'];
-  globalVariables?: RunOptions['globalVariables'];
-}): Promise<RunResult> {
-  const runner = new CollectionRunner();
-  return await runner.run(options.collection, {
-    environment: options.environment,
-    data: options.data,
-    globalVariables: options.globalVariables
-  });
-}
+// Reporters
+export * from './reporters/index.js';

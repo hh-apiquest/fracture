@@ -12,7 +12,7 @@ describe('Section 31: Filtering, Conditions, and Dependencies', () => {
   let runner: CollectionRunner;
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 

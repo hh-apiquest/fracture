@@ -17,7 +17,7 @@ describe('Section 3: quest.request', () => {
 
   beforeEach(() => {
     engine = new ScriptEngine();
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
 
     mockRequest = {

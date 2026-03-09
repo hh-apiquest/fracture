@@ -316,12 +316,13 @@ fracture run <collection> [options]
 
 #### Output & Reporting
 ```bash
--r, --reporters <types>           Output reporters (comma-separated)
-                                  Options: cli, json, html, junit (default: cli)
--o, --out <directory>             Output directory for reports
-    --no-color                    Disable colored output
-    --silent                      Suppress console output
-    --log-level <level>           Log level: error, warn, info, debug, trace (default: info)
+-r, --reporters <types>                      Reporter names (repeatable or comma-separated, default: cli)
+                                             Built-in: cli, json, junit, html
+    --reporter-export <name=target>          Export target for a reporter: stdout, stderr, or file path (repeatable)
+    --reporter-opt <name.key=value>          Pass an option to a specific reporter (repeatable)
+    --no-color                               Disable colored output
+    --silent                                 Suppress all reporter output
+    --log-level <level>                      Log level: error, warn, info, debug, trace (default: info)
 ```
 
 #### Validation & Testing

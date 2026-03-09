@@ -13,7 +13,7 @@ describe('Section 32: DAG-Based Parallel Execution', () => {
   let runner: CollectionRunner;
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
     runner.registerAuthPlugin(mockAuthPlugin);
   });

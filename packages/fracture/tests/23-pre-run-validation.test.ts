@@ -22,7 +22,7 @@ describe('Section 23: Pre-Run Validation', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
     runner.registerAuthPlugin(mockAuthPlugin);
   });

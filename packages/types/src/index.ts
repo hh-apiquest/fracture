@@ -134,11 +134,76 @@ export interface IterationData {
 }
 
 // ============================================================================
+// Plugin Provisioning
+// ============================================================================
+
+/**
+ * Pre-resolved plugin metadata entry.
+ * Mirrors PluginResolver.ResolvedPlugin — named separately so types package
+ * does not depend on the fracture runtime package.
+ */
+export interface ResolvedPluginInfo {
+  /** Package name, e.g. '@apiquest/plugin-http' */
+  name: string;
+  version: string;
+  /** Plugin category */
+  type: 'protocol' | 'auth' | 'value' | 'reporter';
+  /** Plugin root directory (absolute path) */
+  path: string;
+  /** Absolute path to the entry module to import */
+  entryPoint: string;
+  /** For protocol plugins */
+  protocols?: string[];
+  /** For auth plugins */
+  authTypes?: string[];
+  /** For value provider plugins */
+  valueTypes?: string[];
+  /** For reporter plugins */
+  reportTypes?: string[];
+}
+
+/**
+ * Caller provides live plugin instances — zero file I/O, zero scanning.
+ * Each plugin type is stateless; sharing one instance across parallel requests is safe.
+ */
+export interface PluginSourceModules {
+  mode: 'modules';
+  /** Protocol plugin instances to register immediately */
+  protocol?: IProtocolPlugin[];
+  /** Auth plugin instances — plugin-auth exports an IAuthPlugin[] array */
+  auth?: IAuthPlugin[];
+  /** Value provider plugin instances */
+  value?: IValueProviderPlugin[];
+}
+
+/**
+ * Caller provides pre-resolved metadata — runner loads modules from entryPoint paths.
+ * No directory scan is performed by the runner.
+ * Produce this list via PluginResolver.scanDirectories() or equivalent.
+ */
+export interface PluginSourceResolved {
+  mode: 'resolved';
+  resolved: ResolvedPluginInfo[];
+}
+
+/** Discriminated union for plugin provisioning strategy. */
+export type PluginSource = PluginSourceModules | PluginSourceResolved;
+
+// ============================================================================
 // Runtime Options
 // ============================================================================
 
 export interface CollectionRunnerOptions {
-  pluginsDir?: string | string[]; // Optional path(s) to plugins folder(s) for dynamic loading  
+  /**
+   * Plugin provisioning strategy.
+   *
+   * - 'modules': pass live plugin instances — no I/O, no scanning.
+   * - 'resolved': pass pre-scanned metadata; runner loads from entryPoint paths.
+   *
+   * Scanning (PluginResolver.scanDirectories) is a caller concern and should
+   * happen once before constructing CollectionRunner.
+   */
+  plugins: PluginSource;
   logLevel?: LogLevel; // Optional log level (default: INFO)
 }
 
@@ -711,34 +776,72 @@ export interface IReporter {
   description: string;
   
   // What report types does this plugin provide?
-  // Example: ['console'], ['json', 'json-summary'], ['html', 'junit']
+  // Example: ['cli'], ['json', 'json-summary'], ['html', 'junit']
   reportTypes: string[];
   
   // Reporter-specific options schema
-  // Defines what options can be passed to getOptions()
-  // Example: { outputFile: string, verbose: boolean, colors: boolean }
+  // Defines what options can be passed via --reporter-opt
+  // Example: { color: boolean, verbose: boolean }
   optionsSchema?: unknown;
+
+  // Output routing hint used by ReporterManager to determine default export behavior.
+  // 'stdout'        - streams to stdout in real-time (no file write needed)
+  // 'file'          - requires --reporter-export <name=path> or validation fails
+  // 'stdout-or-file' - works with or without explicit export path
+  outputType?: 'stdout' | 'file' | 'stdout-or-file';
   
-  // Get options for a specific report type
-  // Called before run starts to configure the reporter
-  getOptions?(reportType: string): unknown;
+  // Called once before run starts to pass reporter-specific options and export target.
+  // options: parsed reporter-specific options from --reporter-opt name.key=value
+  // exportTarget: value from --reporter-export name=target ('stdout', 'stderr', or file path)
+  configure?(options: Record<string, unknown>, exportTarget?: string): void;
+
+  // Called before the run starts to validate reporter configuration.
+  // Return { valid: false, error: '...' } when required config (e.g., export path) is missing.
+  validate?(): { valid: boolean; error?: string };
   
-  // Lifecycle hooks
+  // --- Run lifecycle ---
   onRunStarted(collection: Collection, options: RunOptions): void;
-  
-  // @deprecated Use onBeforeRequest instead
-  onRequestStarted?(request: Request, path: string): void;
-  // @deprecated Use onAfterRequest + onAssertion instead
-  onRequestCompleted?(result: RequestResult): void;
-  // @deprecated Use onAssertion instead
-  onTestCompleted?(test: TestResult, request: string): void;
-  
-  // New event-based hooks using EventPayloads types
+  onRunCompleted(result: RunResult): void;
+
+  // --- Iteration lifecycle ---
+  onBeforeIteration?(payload: EventPayloads['beforeIteration']): void;
+  onAfterIteration?(payload: EventPayloads['afterIteration']): void;
+
+  // --- Folder lifecycle ---
+  onBeforeFolder?(payload: EventPayloads['beforeFolder']): void;
+  onAfterFolder?(payload: EventPayloads['afterFolder']): void;
+
+  // --- Item (request-node) lifecycle ---
+  onBeforeItem?(payload: EventPayloads['beforeItem']): void;
+  onAfterItem?(payload: EventPayloads['afterItem']): void;
+
+  // --- Request send/receive ---
   onBeforeRequest?(payload: EventPayloads['beforeRequest']): void;
   onAfterRequest?(payload: EventPayloads['afterRequest']): void;
+
+  // --- Test/Assertion ---
   onAssertion?(payload: EventPayloads['assertion']): void;
-  
-  onRunCompleted(result: RunResult): void;
+
+  // --- Script lifecycle (optional fine-grained hooks) ---
+  onBeforeCollectionPreScript?(payload: EventPayloads['beforeCollectionPreScript']): void;
+  onAfterCollectionPreScript?(payload: EventPayloads['afterCollectionPreScript']): void;
+  onBeforeCollectionPostScript?(payload: EventPayloads['beforeCollectionPostScript']): void;
+  onAfterCollectionPostScript?(payload: EventPayloads['afterCollectionPostScript']): void;
+  onBeforeFolderPreScript?(payload: EventPayloads['beforeFolderPreScript']): void;
+  onAfterFolderPreScript?(payload: EventPayloads['afterFolderPreScript']): void;
+  onBeforeFolderPostScript?(payload: EventPayloads['beforeFolderPostScript']): void;
+  onAfterFolderPostScript?(payload: EventPayloads['afterFolderPostScript']): void;
+  onBeforePreScript?(payload: EventPayloads['beforePreScript']): void;
+  onAfterPreScript?(payload: EventPayloads['afterPreScript']): void;
+  onBeforePostScript?(payload: EventPayloads['beforePostScript']): void;
+  onAfterPostScript?(payload: EventPayloads['afterPostScript']): void;
+
+  // --- Utility ---
+  onConsole?(payload: EventPayloads['console']): void;
+  onException?(payload: EventPayloads['exception']): void;
+
+  // Called after onRunCompleted to finalize output (write file contents, close streams).
+  flush?(): Promise<void>;
 }
 
 // ============================================================================

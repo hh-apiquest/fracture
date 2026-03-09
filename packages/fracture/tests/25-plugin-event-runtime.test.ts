@@ -22,7 +22,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
   });
 
   beforeEach(() => {
-    runner = new CollectionRunner();
+    runner = new CollectionRunner({ plugins: { mode: 'modules' } });
     runner.registerPlugin(mockOptionsPlugin);
   });
 
@@ -54,7 +54,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
     });
 
     test('event.index increments for each plugin event of same type', async () => {
-      runner = new CollectionRunner();
+      runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockStreamingPlugin);
       
       const collection: Collection = {
@@ -100,7 +100,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
     });
 
     test('event.index resets per request', async () => {
-      runner = new CollectionRunner();
+      runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockStreamingPlugin);
       
       const collection: Collection = {
@@ -149,7 +149,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
     });
 
     test('event.index is separate per event type', async () => {
-      runner = new CollectionRunner();
+      runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockStreamingPlugin);
       
       const collection: Collection = {
@@ -298,7 +298,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
 
   describe('25.4 quest.expectMessages() Integration with Test Counting', () => {
     beforeEach(() => {
-      runner = new CollectionRunner();
+      runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockStreamingPlugin);
     });
 
@@ -396,7 +396,7 @@ describe('Section 25: Plugin Event Runtime Enhancements', () => {
 
   describe('25.5 Plugin Event Script Validation', () => {
     beforeEach(() => {
-      runner = new CollectionRunner();
+      runner = new CollectionRunner({ plugins: { mode: 'modules' } });
       runner.registerPlugin(mockStreamingPlugin);
     });
 

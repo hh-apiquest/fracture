@@ -24,7 +24,10 @@
 ├── CollectionRunner      - Main orchestration engine
 ├── ScriptEngine          - JavaScript execution (native Node.js VM)
 ├── VariableResolver      - Variable resolution & scoping
-├── PluginManager         - Protocol plugin system
+├── PluginManager         - Protocol & auth plugin registry and dispatch
+├── AuthNegotiator        - Auth orchestration (apply / negotiate handshake)
+├── PluginResolver        - Plugin directory scanner (caller concern)
+├── PluginLoader          - Selective loader for resolved plugin metadata
 ├── EventEmitter          - Real-time progress events
 └── Types                 - TypeScript interfaces
 ```
@@ -41,18 +44,28 @@ Main execution engine responsible for:
 - Plugin coordination
 - Event emission
 
+**Constructor:**
+```typescript
+// Required: plugins must always be provided at construction.
+// Scanning is a caller concern — runner never scans directories.
+const runner = new CollectionRunner(options: CollectionRunnerOptions);
+```
+
 **Key Methods:**
 ```typescript
 class CollectionRunner {
-    // Register protocol plugins
+    // Register additional protocol plugins after construction
     registerPlugin(plugin: IProtocolPlugin): void
-    
+
+    // Register additional auth plugins after construction
+    registerAuthPlugin(plugin: IAuthPlugin): void
+
     // Execute collection
     async run(
         collection: Collection,
         options?: RunOptions
     ): Promise<RunResult>
-    
+
     // Event handling
     on(event: string, handler: Function): void
     off(event: string, handler: Function): void
@@ -110,13 +123,16 @@ class VariableResolver {
 
 #### 4. PluginManager
 
-Manages protocol plugins (HTTP, GraphQL, gRPC, etc.).
+Registry and dispatch for protocol, auth, and value provider plugins.
 
 **Key Methods:**
 ```typescript
 class PluginManager {
-    register(plugin: IProtocolPlugin): void
+    registerPlugin(plugin: IProtocolPlugin): void
+    registerAuthPlugin(plugin: IAuthPlugin): void
+    registerVariableProvider(plugin: IValueProviderPlugin): void
     getPlugin(protocol: string): IProtocolPlugin | undefined
+    getAuthPlugin(type: string): IAuthPlugin | undefined
     async execute(
         request: Request,
         context: ExecutionContext
@@ -124,36 +140,42 @@ class PluginManager {
 }
 ```
 
-#### 5. Plugin Loading Architecture
+#### 5. Plugin Provisioning Architecture
 
-Two-phase selective loading system for optimal performance.
+`CollectionRunner` does not scan directories. Plugin provisioning is always a caller concern.
 
-**Phase 1: Metadata Resolution (Background)**
-- Scans plugin directories for package.json metadata
+**Two provisioning modes:**
+
+**Mode 1 — `modules` (live instances, zero I/O):**
+Caller imports plugin packages directly and passes instances. No file system access.
+
+**Mode 2 — `resolved` (pre-scanned metadata):**
+Caller runs `PluginResolver.scanDirectories()` once and passes the result. Runner loads only plugins required by the collection.
+
+**`PluginResolver` (scanning utility):**
+- Scans plugin directories for `package.json` metadata
 - Reads `apiquest.capabilities.provides` field
 - Resolves version conflicts (newer version wins)
-- Dev plugins override desktop-installed plugins
-- Non-blocking background process
-- Component: `PluginResolver.ts`
+- Returns `ResolvedPlugin[]` list for use with `mode: 'resolved'`
+- Can be called by CLI, desktop app, or any integration layer
 
-**Phase 2: Selective Loading (Collection Start)**
+**`PluginLoader` (selective loader):**
 - Analyzes collection requirements (protocols, auth types, value providers)
-- Loads only required plugins via dynamic import()
+- Loads only required plugins via dynamic `import()` from resolved metadata
 - Filters unused plugins for faster startup
-- Fails fast if required plugin missing
-- Components: `PluginLoader.ts`, `CollectionAnalyzer.ts`
+- Fails fast if required plugin is missing
 
 **Plugin Metadata Format (package.json):**
 ```json
 {
   "apiquest": {
-    "type": "protocol" | "auth" | "value",
+    "type": "protocol",
     "runtime": ["fracture"],
     "capabilities": {
       "provides": {
         "protocols": ["http"],
         "authTypes": ["bearer", "basic"],
-        "provider": "vault:file"
+        "valueTypes": ["vault:file"]
       }
     }
   }
@@ -161,10 +183,10 @@ Two-phase selective loading system for optimal performance.
 ```
 
 **Benefits:**
-- Fast startup (background resolution, selective loading)
-- Version management (newer plugins override older)
-- Priority system (dev plugins override installed)
-- Error handling (resolution continues on errors, loading fails fast)
+- No duplicate scanning (CLI scans once, reuses for reporters and runner)
+- Library-friendly (pass plugin instances or metadata directly)
+- Deterministic (scanner is external; runner knows exactly what it gets)
+- Version management handled by caller via `PluginResolver`
 
 ---
 
@@ -877,8 +899,11 @@ Custom protocol plugin events (for streaming protocols) can also be emitted duri
 
 ```typescript
 import { CollectionRunner } from '@apiquest/fracture';
+import { httpPlugin } from '@apiquest/plugin-http';
 
-const runner = new CollectionRunner();
+const runner = new CollectionRunner({
+    plugins: { mode: 'modules', protocol: [httpPlugin] }
+});
 
 runner.on('beforeRun', ({ collectionInfo }) => {
     console.log(`Starting: ${collectionInfo.name}`);
@@ -906,6 +931,7 @@ runner.on('onMessage', (data) => {
     console.log('Stream message:', data);
 });
 
+const collection = JSON.parse(require('fs').readFileSync('./api-tests.json', 'utf-8'));
 await runner.run(collection);
 ```
 
@@ -969,54 +995,104 @@ fracture run api-tests.json -e prod.json -d users.csv -g apiKey=abc123 --log-lev
 
 ## Programmatic Usage
 
-### Quick Start
+### Library Usage — Mode 1: Explicit module instances (recommended for known plugins)
 
-```typescript
-import { run } from '@apiquest/fracture';
-
-const result = await run({
-    collection: require('./api-tests.json'),
-    environment: require('./prod.json'),
-    data: require('./test-users.json')
-});
-
-console.log(`Tests: ${result.totalTests}`);
-console.log(`Passed: ${result.passedTests}`);
-console.log(`Failed: ${result.failedTests}`);
-```
-
-### Advanced Usage
+Caller imports plugin packages directly. Zero I/O, zero scanning.
 
 ```typescript
 import { CollectionRunner } from '@apiquest/fracture';
-import { httpPlugin } from '@apiquest/plugin-http';
-import { graphqlPlugin } from '@apiquest/plugin-graphql';
+import { httpPlugin } from '@apiquest/plugin-http';     // IProtocolPlugin
+import { authPlugins } from '@apiquest/plugin-auth';   // IAuthPlugin[] — all auth types
+import type { Collection } from '@apiquest/types';
 
-const runner = new CollectionRunner();
+const collection: Collection = JSON.parse(readFileSync('./api-tests.json', 'utf-8'));
 
-// Register plugins
-runner.registerPlugin(httpPlugin);
-runner.registerPlugin(graphqlPlugin);
+const runner = new CollectionRunner({
+    plugins: {
+        mode: 'modules',
+        protocol: [httpPlugin],
+        auth: authPlugins     // plugin-auth exports an IAuthPlugin[] array
+    }
+});
 
 // Listen to events
 runner.on('afterItem', (result) => {
     // Custom logging, metrics, etc.
 });
 
-// Run with options
 const result = await runner.run(collection, {
-    environment,
-    globalVariables: {
-        authToken: process.env.AUTH_TOKEN
-    },
-    iterations: 100,
-    folder: 'User API'
+    environment: JSON.parse(readFileSync('./prod.json', 'utf-8')),
+    globalVariables: { authToken: process.env.AUTH_TOKEN ?? '' },
+    iterations: 100
 });
 
-// Process results
 if (result.failedTests > 0) {
     process.exit(1);
 }
+```
+
+### Library Usage — Mode 2: Pre-scanned metadata (flexible, no hardcoded imports)
+
+Caller scans one or more plugin directories once and passes the result.
+Runner loads only plugins the collection actually needs.
+
+```typescript
+import { CollectionRunner, PluginResolver } from '@apiquest/fracture';
+import type { Collection } from '@apiquest/types';
+
+const collection: Collection = JSON.parse(readFileSync('./api-tests.json', 'utf-8'));
+
+// Scan once — caller chooses directories
+const resolver = new PluginResolver();
+const resolved = await resolver.scanDirectories([
+    '/usr/lib/node_modules/@apiquest',   // global
+    './node_modules/@apiquest'           // local
+]);
+
+const runner = new CollectionRunner({
+    plugins: { mode: 'resolved', resolved }
+});
+
+const result = await runner.run(collection, { environment });
+```
+
+### Library Usage — Mode 3: Default scan directories (CLI-like behavior)
+
+For embedders that want the same auto-discovery behavior as the CLI.
+
+```typescript
+import { CollectionRunner, PluginResolver, getPluginDirectories } from '@apiquest/fracture';
+import type { Collection } from '@apiquest/types';
+
+const collection: Collection = JSON.parse(readFileSync('./api-tests.json', 'utf-8'));
+
+// getPluginDirectories() returns the same directories the CLI auto-discovers:
+// - dev workspace packages/ (when running from monorepo)
+// - global npm @apiquest scope
+const resolver = new PluginResolver();
+const resolved = await resolver.scanDirectories(getPluginDirectories());
+
+const runner = new CollectionRunner({
+    plugins: { mode: 'resolved', resolved }
+});
+
+const result = await runner.run(collection, { environment });
+```
+
+### Extending with additional plugins after construction
+
+After construction, additional plugins can be registered directly:
+
+```typescript
+const runner = new CollectionRunner({
+    plugins: { mode: 'modules', protocol: [httpPlugin], auth: authPlugins }
+});
+
+// Register an extra protocol plugin not in initial list
+runner.registerPlugin(grpcPlugin);
+
+// Register an extra auth plugin not in initial list
+runner.registerAuthPlugin(customAuthPlugin);
 ```
 
 ---
@@ -1074,19 +1150,33 @@ class ScriptEngine {
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { CollectionRunner } from '@apiquest/fracture';
+import type { IProtocolPlugin } from '@apiquest/types';
+
+// Minimal mock plugin for testing
+const mockPlugin: IProtocolPlugin = {
+    name: 'Mock', version: '1.0.0', description: 'Mock',
+    protocols: ['mock'], supportedAuthTypes: [], dataSchema: {},
+    protocolAPIProvider: () => ({}),
+    validate: () => ({ valid: true }),
+    execute: async () => ({
+        data: { status: 200 },
+        summary: { outcome: 'success', code: 200, label: 'OK', duration: 0 }
+    })
+};
 
 describe('CollectionRunner', () => {
     it('executes collection successfully', async () => {
-        const runner = new CollectionRunner();
+        const runner = new CollectionRunner({
+            plugins: { mode: 'modules', protocol: [mockPlugin] }
+        });
         const collection = {
-            id: 'test',
-            name: 'Test Collection',
-            variables: {},
+            info: { id: 'test', name: 'Test Collection' },
+            protocol: 'mock',
             items: []
         };
-        
+
         const result = await runner.run(collection);
-        
+
         expect(result.collectionId).toBe('test');
         expect(result.requestResults).toHaveLength(0);
     });
@@ -1098,19 +1188,18 @@ describe('CollectionRunner', () => {
 ```typescript
 describe('Integration: Data Iterations', () => {
     it('runs collection for each data row', async () => {
-        const runner = new CollectionRunner();
-        const collection = {
-            /* ... */
-            items: [{ /* request */ }]
-        };
+        const runner = new CollectionRunner({
+            plugins: { mode: 'modules', protocol: [mockPlugin] }
+        });
+        const collection = { info: { id: 'c', name: 'C' }, protocol: 'mock', items: [{ /* request */ }] };
         const data = [
             { userId: 1 },
             { userId: 2 },
             { userId: 3 }
         ];
-        
+
         const result = await runner.run(collection, { data });
-        
+
         expect(result.requestResults).toHaveLength(3);
     });
 });
