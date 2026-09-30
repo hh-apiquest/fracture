@@ -87,7 +87,14 @@ jobs:
               echo "Publishing ${package_name}@${package_version}"
               (
                 cd "${package_dir}"
-                npm publish --provenance --access public
+                tarball="${RUNNER_TEMP}/$(basename "${package_dir}").tgz"
+                # yarn pack resolves workspace: specifiers; npm publish does not
+                yarn pack --out "${tarball}"
+                if tar -xOzf "${tarball}" package/package.json | grep -q 'workspace:'; then
+                  echo "workspace: protocol left in ${package_name} manifest"
+                  exit 1
+                fi
+                npm publish "${tarball}" --provenance --access public
               )
             fi
           }
